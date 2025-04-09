@@ -33,7 +33,7 @@ const DISCORD_CHANNEL_MS = process.env["DISCORD_CHANNEL_MS"];
 const DISCORD_CHANNEL_HAB = process.env["DISCORD_CHANNEL_HAB"];
 const REDIS_URL = process.env["REDIS_URL"];
 const NODE_INFO_UPDATES = process.env["NODE_INFO_UPDATES"] === "1";
-const MQTT_BROKER_URL = process.env["MQTT_BROKEN_URL"];
+const MQTT_BROKER_URL = process.env["MQTT_BROKER_URL"];
 const MQTT_TOPICS = JSON.parse(process.env["MQTT_TOPICS"] || "[]");
 
 if (MQTT_BROKER_URL === undefined || MQTT_BROKER_URL.length === 0) {
