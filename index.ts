@@ -25,6 +25,14 @@ import logger from "./src/Logger";
 import Commands from "./src/Commands";
 import { nodeHex2id, nodeId2hex } from "./src/NodeUtils";
 
+// generate a pseduo uuid kinda thing to use as an instance id
+const INSTANCE_ID = (() => {
+  return crypto.randomBytes(4).toString("hex");
+})();
+logger.init(INSTANCE_ID);
+
+logger.info("Starting Mesh Logger");
+
 const DISCORD_CLIENT_ID = process.env["DISCORD_CLIENT_ID"];
 const DISCORD_TOKEN = process.env["DISCORD_TOKEN"];
 const DISCORD_GUILD = process.env["DISCORD_GUILD"];
@@ -35,6 +43,8 @@ const REDIS_URL = process.env["REDIS_URL"];
 const NODE_INFO_UPDATES = process.env["NODE_INFO_UPDATES"] === "1";
 const MQTT_BROKER_URL = process.env["MQTT_BROKER_URL"];
 const MQTT_TOPICS = JSON.parse(process.env["MQTT_TOPICS"] || "[]");
+
+console.log(process.env);
 
 if (MQTT_BROKER_URL === undefined || MQTT_BROKER_URL.length === 0) {
   throw new Error("MQTT_BROKER_URL is not set");
@@ -55,12 +65,6 @@ if (DISCORD_TOKEN === undefined || DISCORD_TOKEN.length === 0) {
 if (DISCORD_GUILD === undefined || DISCORD_GUILD.length === 0) {
   throw new Error("DISCORD_GUILD is not set");
 }
-
-// generate a pseduo uuid kinda thing to use as an instance id
-const INSTANCE_ID = (() => {
-  return crypto.randomBytes(4).toString("hex");
-})();
-logger.init(INSTANCE_ID);
 
 const decryptionKeys = [
   "1PG7OiApB1nwvP+rz05pAQ==", // add default "AQ==" decryption key
