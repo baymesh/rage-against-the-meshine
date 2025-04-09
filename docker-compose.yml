@@ -1,0 +1,5 @@
+version: '3.8'
+
+services:
+  bot:
+    image: ghcr.io/ppicazo/rage-against-the-meshine-beta:latest
