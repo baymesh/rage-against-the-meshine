@@ -1,8 +1,9 @@
 {
-  "name": "nodejs",
+  "name": "rage-against-the-meshine",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "index.tsx",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,6 +11,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/node": "^18.0.6"
+    "@types/node": "^18.0.6",
+    "discord.js": "^14.18.0",
+    "mqtt": "^5.10.4",
+    "protobufjs": "^7.4.0",
+    "redis": "^4.7.0",
+    "tsx": "^4.19.3"
   }
 }
