@@ -44,7 +44,13 @@ const NODE_INFO_UPDATES = process.env["NODE_INFO_UPDATES"] === "1";
 const MQTT_BROKER_URL = process.env["MQTT_BROKER_URL"];
 const MQTT_TOPICS = JSON.parse(process.env["MQTT_TOPICS"] || "[]");
 
+console.log("env vars:");
 console.log(process.env);
+
+// wait for 1 minute
+await new Promise((resolve) => setTimeout(resolve, 60000));
+
+console.log("sleep done.");
 
 if (MQTT_BROKER_URL === undefined || MQTT_BROKER_URL.length === 0) {
   throw new Error("MQTT_BROKER_URL is not set");
