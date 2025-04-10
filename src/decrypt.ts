@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Data } from "protobufjs";
+import { Data } from "../index.ts";
 
 const decryptionKeys = [
   "1PG7OiApB1nwvP+rz05pAQ==", // add default "AQ==" decryption key

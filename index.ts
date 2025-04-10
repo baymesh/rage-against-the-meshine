@@ -88,6 +88,8 @@ const ServiceEnvelope = root.lookupType("ServiceEnvelope");
 const Position = root.lookupType("Position");
 const User = root.lookupType("User");
 
+export { Data };
+
 const discordMessageIdCache = new FifoCache<string, string>();
 const meshPacketCache = new MeshPacketCache();
 
