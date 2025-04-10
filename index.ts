@@ -76,10 +76,6 @@ if (DISCORD_GUILD === undefined || DISCORD_GUILD.length === 0) {
   throw new Error("DISCORD_GUILD is not set");
 }
 
-const decryptionKeys = [
-  "1PG7OiApB1nwvP+rz05pAQ==", // add default "AQ==" decryption key
-];
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
