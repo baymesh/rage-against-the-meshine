@@ -44,13 +44,13 @@ const NODE_INFO_UPDATES = process.env["NODE_INFO_UPDATES"] === "1";
 const MQTT_BROKER_URL = process.env["MQTT_BROKER_URL"];
 const MQTT_TOPICS = JSON.parse(process.env["MQTT_TOPICS"] || "[]");
 
-console.log("env vars:");
-console.log(process.env);
+logger.info("env vars:");
+logger.info(JSON.stringify(process.env));
 
 // wait for 1 minute
 await new Promise((resolve) => setTimeout(resolve, 60000));
 
-console.log("sleep done.");
+logger.info("sleep done.");
 
 if (MQTT_BROKER_URL === undefined || MQTT_BROKER_URL.length === 0) {
   throw new Error("MQTT_BROKER_URL is not set");
@@ -103,7 +103,7 @@ const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
 (async () => {
   try {
-    console.log("Started refreshing application (/) commands.");
+    logger.info("Started refreshing application (/) commands.");
 
     // Register the command for a specific guild (for development, guild commands update faster).
     await rest.put(
@@ -113,33 +113,33 @@ const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
       },
     );
 
-    console.log("Successfully reloaded application (/) commands.");
+    logger.info("Successfully reloaded application (/) commands.");
   } catch (error) {
-    console.error(error);
+    logger.error(error);
   }
 })();
 
 // When Discord client is ready, start the MQTT connection.
 client.once("ready", () => {
-  console.log(`Logged in as ${client.user.tag}!`);
+  logger.info(`Logged in as ${client.user.tag}!`);
 
   const guild = client.guilds.cache.find((g) => g.id === DISCORD_GUILD);
   if (!guild) {
-    console.error("No guild available for the bot");
+    logger.error("No guild available for the bot");
     return;
   } else {
-    console.log(guild);
+    logger.info(JSON.stringify(guild));
   }
 
   const lfChannel = guild.channels.cache.find(
     (ch) => ch.id === DISCORD_CHANNEL_LF && ch.isTextBased(),
   );
   if (!lfChannel) {
-    console.error(`Channel Id "${DISCORD_CHANNEL_LF}" not found`);
+    logger.error(`Channel Id "${DISCORD_CHANNEL_LF}" not found`);
     // return;
   } else {
-    // console.log(lfChannel);
-    console.log(`Channel ${lfChannel.name} found`);
+    // logger.info(lfChannel);
+    logger.info(`Channel ${lfChannel.name} found`);
     // lfChanelId = lfChannel.id;
   }
 
@@ -147,11 +147,11 @@ client.once("ready", () => {
     (ch) => ch.id === DISCORD_CHANNEL_MS && ch.isTextBased(),
   );
   if (!msChannel) {
-    console.error(`Channel Id "${DISCORD_CHANNEL_MS}" not found`);
+    logger.error(`Channel Id "${DISCORD_CHANNEL_MS}" not found`);
     // return;
   } else {
-    // console.log(msChannel);
-    console.log(`Channel ${msChannel.name} found`);
+    // logger.info(msChannel);
+    logger.info(`Channel ${msChannel.name} found`);
     // msChannelId = msChannel.id;
   }
 
@@ -159,8 +159,8 @@ client.once("ready", () => {
     (ch) => ch.id === DISCORD_CHANNEL_HAB && ch.isTextBased(),
   );
   if (!habChannel)
-    console.error(`Channel Id "${DISCORD_CHANNEL_HAB}" not found`);
-  else console.log(`Channel ${habChannel.name} found`);
+    logger.error(`Channel Id "${DISCORD_CHANNEL_HAB}" not found`);
+  else logger.info(`Channel ${habChannel.name} found`);
 
   // Connect to the MQTT broker.
   const mqttClient = mqtt.connect(MQTT_BROKER_URL, {
@@ -230,7 +230,7 @@ client.once("ready", () => {
       });
 
       // Log the desired output to the console.
-      console.log(`node: ${nodeId}, profile_image_url: ${profileImageUrl}`);
+      logger.info(`node: ${nodeId}, profile_image_url: ${profileImageUrl}`);
 
       const result = await meshRedis.linkNode(nodeId, interaction.user.id);
 
@@ -292,16 +292,16 @@ client.once("ready", () => {
         flags: MessageFlags.Ephemeral,
       });
     } else if (interaction.commandName === "addtracker") {
-      console.log(interaction.user);
+      logger.info(interaction.user);
       const roles = await guild.members
         .fetch(interaction.user.id)
         .then((member) => {
           const roles = member.roles.cache.map((role) => role.name);
-          // console.log(roles);
+          // logger.info(roles);
           return roles;
         })
-        .catch(console.error);
-      console.log(roles);
+        .catch(logger.error);
+      logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
         let nodeId = interaction.options
           .getString("nodeid")
@@ -361,16 +361,16 @@ client.once("ready", () => {
         return;
       }
     } else if (interaction.commandName === "removetracker") {
-      console.log(interaction.user);
+      logger.info(interaction.user);
       const roles = await guild.members
         .fetch(interaction.user.id)
         .then((member) => {
           const roles = member.roles.cache.map((role) => role.name);
-          // console.log(roles);
+          // logger.info(roles);
           return roles;
         })
-        .catch(console.error);
-      console.log(roles);
+        .catch(logger.error);
+      logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
         let nodeId = interaction.options
           .getString("nodeid")
@@ -430,16 +430,16 @@ client.once("ready", () => {
         return;
       }
     } else if (interaction.commandName === "addballoon") {
-      console.log(interaction.user);
+      logger.info(interaction.user);
       const roles = await guild.members
         .fetch(interaction.user.id)
         .then((member) => {
           const roles = member.roles.cache.map((role) => role.name);
-          // console.log(roles);
+          // logger.info(roles);
           return roles;
         })
-        .catch(console.error);
-      console.log(roles);
+        .catch(logger.error);
+      logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
         let nodeId = interaction.options
           .getString("nodeid")
@@ -499,16 +499,16 @@ client.once("ready", () => {
         return;
       }
     } else if (interaction.commandName === "removeballoon") {
-      console.log(interaction.user);
+      logger.info(interaction.user);
       const roles = await guild.members
         .fetch(interaction.user.id)
         .then((member) => {
           const roles = member.roles.cache.map((role) => role.name);
-          // console.log(roles);
+          // logger.info(roles);
           return roles;
         })
-        .catch(console.error);
-      console.log(roles);
+        .catch(logger.error);
+      logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
         let nodeId = interaction.options
           .getString("nodeid")
@@ -697,7 +697,7 @@ client.once("ready", () => {
         return hopStart > acc ? hopStart : acc;
       }, 0);
 
-      // console.log("maxHopStart", maxHopStart);
+      // logger.info("maxHopStart", maxHopStart);
 
       const discordUserId = await meshRedis.getDiscordUserId(nodeIdHex);
       logger.info(`nodeIdHex: ${nodeIdHex}, discordUserId: ${discordUserId}`);
@@ -757,7 +757,7 @@ client.once("ready", () => {
         const position = Position.decode(
           packetGroup.serviceEnvelopes[0].packet.decoded.payload,
         ) as DecodedPosition;
-        // console.log(position);
+        // logger.info(position);
         // Position {
         //   latitudeI: 379260350,
         //   longitudeI: -1225297610,
@@ -769,7 +769,7 @@ client.once("ready", () => {
         //   precisionBits: 32
         // }
         // envelope.packet.decoded.payload = `Latitude: ${position.latitudeI / 10000000} Longitude: ${position.longitudeI / 10000000} ${position.altitude ? ` Altitude: ${position.altitude}m` : ""}`;
-        // console.log(from, envelope.packet.decoded.payload);
+        // logger.info(from, envelope.packet.decoded.payload);
 
         infoFields.push({
           name: "Latitude",
@@ -810,7 +810,7 @@ client.once("ready", () => {
         //   });
         // }
 
-        console.log(position);
+        logger.info(position);
 
         try {
           msgText = decodedPositionToString(position);
@@ -820,7 +820,7 @@ client.once("ready", () => {
         mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${position.latitudeI / 10000000}&lon=${position.longitudeI / 10000000}&width=400&height=400&zoom=12`;
       }
 
-      console.log(mapUrl);
+      logger.info(mapUrl);
 
       if (ownerField) {
         infoFields.push({
@@ -1082,7 +1082,7 @@ client.once("ready", () => {
           url: mapUrl,
         };
       }
-      // console.log(content);
+      // logger.info(content);
 
       return content;
     } catch (err) {
@@ -1111,7 +1111,7 @@ client.once("ready", () => {
   }, 5000);
 
   mqttClient.on("error", (err) => {
-    console.error("MQTT Client Error:", err);
+    logger.error("MQTT Client Error:", err);
   });
 
   mqttClient.on("connect", () => {
@@ -1119,7 +1119,7 @@ client.once("ready", () => {
     // Subscribe to the topic where your packets are published.
     mqttClient.subscribe("msh/US/#", (err) => {
       if (err) {
-        console.error("Error subscribing to MQTT topic:", err);
+        logger.error("Error subscribing to MQTT topic:", err);
       } else {
         logger.info("Subscribed to MQTT topic");
       }
@@ -1232,7 +1232,7 @@ function decrypt(packet) {
   // attempt to decrypt with all available decryption keys
   for (const decryptionKey of decryptionKeys) {
     try {
-      // console.log(`using decryption key: ${decryptionKey}`);
+      // logger.info(`using decryption key: ${decryptionKey}`);
       // convert encryption key to buffer
       const key = Buffer.from(decryptionKey, "base64");
 
@@ -1251,7 +1251,7 @@ function decrypt(packet) {
       // parse as data message
       return Data.decode(decryptedBuffer);
     } catch (e) {
-      // console.log(e);
+      // logger.info(e);
     }
   }
 
