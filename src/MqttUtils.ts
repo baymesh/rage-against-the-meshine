@@ -1,5 +1,5 @@
 import { ServiceEnvelope, Position, User } from "../index";
-import { MeshPacketCache } from "./MeshPacketCache";
+import MeshPacketCache from "./MeshPacketCache";
 import { decrypt } from "./decrypt";
 import meshRedis from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
