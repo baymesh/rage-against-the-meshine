@@ -23,9 +23,11 @@ import MeshPacketCache, {
 import meshRedis from "./src/MeshRedis";
 import logger from "./src/Logger";
 import Commands from "./src/Commands";
-import { nodeHex2id, nodeId2hex } from "./src/NodeUtils";
+import { nodeHex2id, nodeId2hex, fetchNodeId } from "./src/NodeUtils";
 import { createDiscordMessage } from "./src/DiscordMessageUtils";
-
+import { fetchUserRoles, fetchDiscordChannel } from "./src/DiscordUtils";
+import { processTextMessage } from "./src/MessageUtils";
+import { handleMqttMessage } from "./src/MqttUtils";
 
 // generate a pseduo uuid kinda thing to use as an instance id
 const INSTANCE_ID = (() => {
@@ -133,36 +135,9 @@ client.once("ready", () => {
     logger.info(JSON.stringify(guild));
   }
 
-  const lfChannel = guild.channels.cache.find(
-    (ch) => ch.id === DISCORD_CHANNEL_LF && ch.isTextBased(),
-  );
-  if (!lfChannel) {
-    logger.error(`Channel Id "${DISCORD_CHANNEL_LF}" not found`);
-    // return;
-  } else {
-    // logger.info(lfChannel);
-    logger.info(`Channel ${lfChannel.name} found`);
-    // lfChanelId = lfChannel.id;
-  }
-
-  const msChannel = guild.channels.cache.find(
-    (ch) => ch.id === DISCORD_CHANNEL_MS && ch.isTextBased(),
-  );
-  if (!msChannel) {
-    logger.error(`Channel Id "${DISCORD_CHANNEL_MS}" not found`);
-    // return;
-  } else {
-    // logger.info(msChannel);
-    logger.info(`Channel ${msChannel.name} found`);
-    // msChannelId = msChannel.id;
-  }
-
-  const habChannel = guild.channels.cache.find(
-    (ch) => ch.id === DISCORD_CHANNEL_HAB && ch.isTextBased(),
-  );
-  if (!habChannel)
-    logger.error(`Channel Id "${DISCORD_CHANNEL_HAB}" not found`);
-  else logger.info(`Channel ${habChannel.name} found`);
+  const lfChannel = fetchDiscordChannel(guild, DISCORD_CHANNEL_LF);
+  const msChannel = fetchDiscordChannel(guild, DISCORD_CHANNEL_MS);
+  const habChannel = fetchDiscordChannel(guild, DISCORD_CHANNEL_HAB);
 
   // Connect to the MQTT broker.
   const mqttClient = mqtt.connect(MQTT_BROKER_URL, {
@@ -180,49 +155,15 @@ client.once("ready", () => {
 
     // Handle the /linknode command.
     if (interaction.commandName === "linknode") {
-      // Get the nodeid argument.
-      let nodeId = interaction.options
-        .getString("nodeid")
-        .replace("https://meshview.bayme.sh/packet_list/", "")
-        .replace("!", "")
-        .trim();
+      let nodeId = fetchNodeId(interaction);
 
-      if (
-        nodeId === undefined ||
-        nodeId === null ||
-        nodeId.trim().length === 0
-      ) {
+      if (!nodeId) {
         logger.warn("Received /linknode command with no nodeid");
         await interaction.reply({
           content: "Please provide a nodeid",
           ephemeral: true,
         });
         return;
-      }
-
-      if (nodeId.length !== 8) {
-        // attempt to convert to hex
-        let nodeIdHex;
-        try {
-          nodeIdHex = nodeId2hex(parseInt(nodeId));
-        } catch (e) {
-          logger.warn(`Couldn't parse node id: ${nodeId}`);
-        }
-        if (
-          nodeIdHex === undefined ||
-          nodeIdHex === null ||
-          nodeIdHex.length !== 8
-        ) {
-          logger.warn(
-            `Received /linknode command with invalid nodeid "${nodeId}"`,
-          );
-          await interaction.reply({
-            content: "Please provide a valid nodeid",
-            ephemeral: true,
-          });
-          return;
-        }
-        nodeId = nodeIdHex;
       }
 
       // Get the invoking user's profile image URL.
@@ -244,48 +185,15 @@ client.once("ready", () => {
         flags: MessageFlags.Ephemeral,
       });
     } else if (interaction.commandName === "unlinknode") {
-      let nodeId = interaction.options
-        .getString("nodeid")
-        .replace("https://meshview.bayme.sh/packet_list/", "")
-        .replace("!", "")
-        .trim();
+      let nodeId = fetchNodeId(interaction);
 
-      if (
-        nodeId === undefined ||
-        nodeId === null ||
-        nodeId.trim().length === 0
-      ) {
+      if (!nodeId) {
         logger.warn("Received /unlinknode command with no nodeid");
         await interaction.reply({
           content: "Please provide a nodeid",
           ephemeral: true,
         });
         return;
-      }
-
-      if (nodeId.length !== 8) {
-        // attempt to convert to hex
-        let nodeIdHex;
-        try {
-          nodeIdHex = nodeId2hex(parseInt(nodeId));
-        } catch (e) {
-          logger.warn(`Couldn't parse node id: ${nodeId}`);
-        }
-        if (
-          nodeIdHex === undefined ||
-          nodeIdHex === null ||
-          nodeIdHex.length !== 8
-        ) {
-          logger.warn(
-            `Received /unlinknode command with invalid nodeid "${nodeId}"`,
-          );
-          await interaction.reply({
-            content: "Please provide a valid nodeid",
-            ephemeral: true,
-          });
-          return;
-        }
-        nodeId = nodeIdHex;
       }
 
       const result = await meshRedis.unlinkNode(nodeId, interaction.user.id);
@@ -295,58 +203,18 @@ client.once("ready", () => {
       });
     } else if (interaction.commandName === "addtracker") {
       logger.info(interaction.user);
-      const roles = await guild.members
-        .fetch(interaction.user.id)
-        .then((member) => {
-          const roles = member.roles.cache.map((role) => role.name);
-          // logger.info(roles);
-          return roles;
-        })
-        .catch(logger.error);
+      const roles = await fetchUserRoles(guild, interaction.user.id);
       logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
-        let nodeId = interaction.options
-          .getString("nodeid")
-          .replace("https://meshview.bayme.sh/packet_list/", "")
-          .replace("!", "")
-          .trim();
+        let nodeId = fetchNodeId(interaction);
 
-        if (
-          nodeId === undefined ||
-          nodeId === null ||
-          nodeId.trim().length === 0
-        ) {
+        if (!nodeId) {
           logger.warn("Received /addtracker command with no nodeid");
           await interaction.reply({
             content: "Please provide a nodeid",
             ephemeral: true,
           });
           return;
-        }
-
-        if (nodeId.length !== 8) {
-          // attempt to convert to hex
-          let nodeIdHex;
-          try {
-            nodeIdHex = nodeId2hex(parseInt(nodeId));
-          } catch (e) {
-            logger.warn(`Couldn't parse node id: ${nodeId}`);
-          }
-          if (
-            nodeIdHex === undefined ||
-            nodeIdHex === null ||
-            nodeIdHex.length !== 8
-          ) {
-            logger.warn(
-              `Received /addtracker command with invalid nodeid "${nodeId}"`,
-            );
-            await interaction.reply({
-              content: "Please provide a valid nodeid",
-              ephemeral: true,
-            });
-            return;
-          }
-          nodeId = nodeIdHex;
         }
 
         meshRedis.addTrackerNode(nodeId);
@@ -364,58 +232,18 @@ client.once("ready", () => {
       }
     } else if (interaction.commandName === "removetracker") {
       logger.info(interaction.user);
-      const roles = await guild.members
-        .fetch(interaction.user.id)
-        .then((member) => {
-          const roles = member.roles.cache.map((role) => role.name);
-          // logger.info(roles);
-          return roles;
-        })
-        .catch(logger.error);
+      const roles = await fetchUserRoles(guild, interaction.user.id);
       logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
-        let nodeId = interaction.options
-          .getString("nodeid")
-          .replace("https://meshview.bayme.sh/packet_list/", "")
-          .replace("!", "")
-          .trim();
+        let nodeId = fetchNodeId(interaction);
 
-        if (
-          nodeId === undefined ||
-          nodeId === null ||
-          nodeId.trim().length === 0
-        ) {
+        if (!nodeId) {
           logger.warn("Received /removetracker command with no nodeid");
           await interaction.reply({
             content: "Please provide a nodeid",
             ephemeral: true,
           });
           return;
-        }
-
-        if (nodeId.length !== 8) {
-          // attempt to convert to hex
-          let nodeIdHex;
-          try {
-            nodeIdHex = nodeId2hex(parseInt(nodeId));
-          } catch (e) {
-            logger.warn(`Couldn't parse node id: ${nodeId}`);
-          }
-          if (
-            nodeIdHex === undefined ||
-            nodeIdHex === null ||
-            nodeIdHex.length !== 8
-          ) {
-            logger.warn(
-              `Received /removetracker command with invalid nodeid "${nodeId}"`,
-            );
-            await interaction.reply({
-              content: "Please provide a valid nodeid",
-              ephemeral: true,
-            });
-            return;
-          }
-          nodeId = nodeIdHex;
         }
 
         meshRedis.removeTrackerNode(nodeId);
@@ -433,58 +261,18 @@ client.once("ready", () => {
       }
     } else if (interaction.commandName === "addballoon") {
       logger.info(interaction.user);
-      const roles = await guild.members
-        .fetch(interaction.user.id)
-        .then((member) => {
-          const roles = member.roles.cache.map((role) => role.name);
-          // logger.info(roles);
-          return roles;
-        })
-        .catch(logger.error);
+      const roles = await fetchUserRoles(guild, interaction.user.id);
       logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
-        let nodeId = interaction.options
-          .getString("nodeid")
-          .replace("https://meshview.bayme.sh/packet_list/", "")
-          .replace("!", "")
-          .trim();
+        let nodeId = fetchNodeId(interaction);
 
-        if (
-          nodeId === undefined ||
-          nodeId === null ||
-          nodeId.trim().length === 0
-        ) {
+        if (!nodeId) {
           logger.warn("Received /addballoon command with no nodeid");
           await interaction.reply({
             content: "Please provide a nodeid",
             ephemeral: true,
           });
           return;
-        }
-
-        if (nodeId.length !== 8) {
-          // attempt to convert to hex
-          let nodeIdHex;
-          try {
-            nodeIdHex = nodeId2hex(parseInt(nodeId));
-          } catch (e) {
-            logger.warn(`Couldn't parse node id: ${nodeId}`);
-          }
-          if (
-            nodeIdHex === undefined ||
-            nodeIdHex === null ||
-            nodeIdHex.length !== 8
-          ) {
-            logger.warn(
-              `Received /addballoon command with invalid nodeid "${nodeId}"`,
-            );
-            await interaction.reply({
-              content: "Please provide a valid nodeid",
-              ephemeral: true,
-            });
-            return;
-          }
-          nodeId = nodeIdHex;
         }
 
         meshRedis.addBalloonNode(nodeId);
@@ -502,58 +290,18 @@ client.once("ready", () => {
       }
     } else if (interaction.commandName === "removeballoon") {
       logger.info(interaction.user);
-      const roles = await guild.members
-        .fetch(interaction.user.id)
-        .then((member) => {
-          const roles = member.roles.cache.map((role) => role.name);
-          // logger.info(roles);
-          return roles;
-        })
-        .catch(logger.error);
+      const roles = await fetchUserRoles(guild, interaction.user.id);
       logger.info(roles);
       if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
-        let nodeId = interaction.options
-          .getString("nodeid")
-          .replace("https://meshview.bayme.sh/packet_list/", "")
-          .replace("!", "")
-          .trim();
+        let nodeId = fetchNodeId(interaction);
 
-        if (
-          nodeId === undefined ||
-          nodeId === null ||
-          nodeId.trim().length === 0
-        ) {
+        if (!nodeId) {
           logger.warn("Received /removeballoon command with no nodeid");
           await interaction.reply({
             content: "Please provide a nodeid",
             ephemeral: true,
           });
           return;
-        }
-
-        if (nodeId.length !== 8) {
-          // attempt to convert to hex
-          let nodeIdHex;
-          try {
-            nodeIdHex = nodeId2hex(parseInt(nodeId));
-          } catch (e) {
-            logger.warn(`Couldn't parse node id: ${nodeId}`);
-          }
-          if (
-            nodeIdHex === undefined ||
-            nodeIdHex === null ||
-            nodeIdHex.length !== 8
-          ) {
-            logger.warn(
-              `Received /removeballoon command with invalid nodeid "${nodeId}"`,
-            );
-            await interaction.reply({
-              content: "Please provide a valid nodeid",
-              ephemeral: true,
-            });
-            return;
-          }
-          nodeId = nodeIdHex;
         }
 
         meshRedis.removeBalloonNode(nodeId);
@@ -577,102 +325,6 @@ client.once("ready", () => {
     }
   });
 
-  const processTextMessage = async (packetGroup: PacketGroup) => {
-    const packet = packetGroup.serviceEnvelopes[0].packet;
-    let text = packet.decoded.payload.toString();
-    const to = nodeId2hex(packet.to);
-    const portNum = packet?.decoded?.portnum;
-
-    if (portNum === 3) {
-      text = "Position Packet";
-    }
-
-    // discard text messages in the form of "seq 6034" "seq 6025"
-    if (text.match(/^seq \d+$/)) {
-      return;
-    }
-
-    if (process.env.ENVIRONMENT === "production" && to !== "ffffffff") {
-      logger.info(
-        `MessageId: ${packetGroup.id} Not to public channel: ${packetGroup.serviceEnvelopes.map((envelope) => envelope.topic)}`,
-      );
-      return;
-    }
-
-    logger.debug("createDiscordMessage: " + text);
-    logger.debug("reply_id: " + packet.decoded.replyId?.toString());
-
-    // const discordChannel =
-    //   packetGroup.serviceEnvelopes[0].channelId === "MediumSlow"
-    //     ? msChannel
-    //     : lfChannel;
-
-    const nodeId = nodeId2hex(packet.from);
-
-    const balloonNode = await meshRedis.isBalloonNode(nodeId);
-    // const trackerNode = await meshRedis.isTrackerNode(nodeId);
-
-    const content = await createDiscordMessage(packetGroup, text, balloonNode, client, guild);
-
-    const getDiscordChannel = async (balloonNode, channelId) => {
-      if (balloonNode) {
-        return habChannel;
-      }
-      if (channelId === "MediumSlow") {
-        return msChannel;
-      } else if (channelId === "LongFast") {
-        return lfChannel;
-      } else if (channelId === "HAB") {
-        return habChannel;
-      } else {
-        return null;
-      }
-    };
-
-    let discordChannel = await getDiscordChannel(
-      balloonNode,
-      packetGroup.serviceEnvelopes[0].channelId,
-    );
-
-    if (discordChannel === null) {
-      logger.warn(
-        "No discord channel found for channelId: " +
-          packetGroup.serviceEnvelopes[0].channelId,
-      );
-      return;
-    }
-
-    if (discordMessageIdCache.exists(packet.id.toString())) {
-      // update original message
-      logger.info("Updating message: " + packet.id.toString());
-      const discordMessageId = discordMessageIdCache.get(packet.id.toString());
-      const originalMessage =
-        await discordChannel.messages.fetch(discordMessageId);
-      originalMessage.edit(content);
-      // discordChannel.messages.edit(discordMessageId, content);
-    } else {
-      // send new message
-      logger.info("Sending message: " + packet.id.toString());
-      let discordMessage;
-      if (
-        packet.decoded.replyId &&
-        packet.decoded.replyId > 0 &&
-        discordMessageIdCache.exists(packet.decoded.replyId.toString())
-      ) {
-        const discordMessageId = discordMessageIdCache.get(
-          packet.decoded.replyId.toString(),
-        );
-        const existingMessage =
-          await discordChannel.messages.fetch(discordMessageId);
-        discordMessage = await existingMessage.reply(content);
-      } else {
-        discordMessage = await discordChannel.send(content);
-      }
-      // store message id in cache
-      discordMessageIdCache.set(packet.id.toString(), discordMessage.id);
-    }
-  };
-
   const processing_timer = setInterval(() => {
     const packetGroups = meshPacketCache.getDirtyPacketGroups();
     // logger.info("Processing " + packetGroups.length + " packet groups");
@@ -688,7 +340,7 @@ client.once("ready", () => {
             packetGroup.serviceEnvelopes[0].packet.decoded.payload.toString(),
         );
       }
-      processTextMessage(packetGroup);
+      processTextMessage(packetGroup, client, guild, discordMessageIdCache, habChannel, msChannel, lfChannel);
     });
   }, 5000);
 
@@ -709,81 +361,7 @@ client.once("ready", () => {
   });
 
   mqttClient.on("message", async (topic, message) => {
-    try {
-      if (topic.includes("msh")) {
-        if (!topic.includes("/json")) {
-          if (topic.includes("/stat/")) {
-            return;
-          }
-          let envelope;
-          try {
-            envelope = ServiceEnvelope.decode(message);
-          } catch (envDecodeErr) {
-            if (
-              String(envDecodeErr).indexOf(
-                "invalid wire type 7 at offset 1",
-              ) === -1
-            ) {
-              logger.error(
-                `MessageId: Error decoding service envelope: ${envDecodeErr}`,
-              );
-            }
-            return;
-          }
-          if (!envelope || !envelope.packet) {
-            return;
-          }
-
-          if (
-            MQTT_TOPICS.some((t) => {
-              return topic.startsWith(t);
-            }) ||
-            meshPacketCache.exists(envelope.packet.id)
-          ) {
-            // attempt to decrypt encrypted packets
-            const isEncrypted = envelope.packet.encrypted?.length > 0;
-            if (isEncrypted) {
-              const decoded = decrypt(envelope.packet);
-              if (decoded) {
-                envelope.packet.decoded = decoded;
-              }
-            }
-            const portnum = envelope.packet?.decoded?.portnum;
-            if (portnum === 1) {
-              meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
-            } else if (portnum === 3) {
-              const from = envelope.packet.from.toString(16);
-              // logger.info(`Received position packet from ${from}`);
-              const isTrackerNode = await meshRedis.isTrackerNode(from);
-              const isBalloonNode = await meshRedis.isBalloonNode(from);
-              if (!isTrackerNode && !isBalloonNode) {
-                return;
-              }
-              const position = Position.decode(envelope.packet.decoded.payload);
-              if (!position.latitudeI && !position.longitudeI) {
-                return;
-              }
-              meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
-            } else if (portnum === 4) {
-              if (!NODE_INFO_UPDATES) {
-                logger.info("Node info updates disabled");
-                return;
-              }
-              const user = User.decode(envelope.packet.decoded.payload);
-              const from = nodeId2hex(envelope.packet.from);
-              meshRedis.updateNodeDB(
-                from,
-                user.longName,
-                user,
-                envelope.packet.hopStart,
-              );
-            }
-          }
-        }
-      }
-    } catch (err) {
-      logger.error("Error: " + String(err));
-    }
+    await handleMqttMessage(topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES, MQTT_BROKER_URL);
   });
 });
 
