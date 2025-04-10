@@ -11,6 +11,7 @@ import {
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
 import protobufjs from "protobufjs";
+import crypto from "crypto";
 import mqtt from "mqtt";
 
 import FifoCache from "./src/FifoCache";
