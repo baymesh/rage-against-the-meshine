@@ -1,5 +1,5 @@
 import { GuildMember, User as DiscordUser, userMention } from "discord.js";
-import { nodeId2hex } from "./NodeUtils";
+import { nodeHex2id, nodeId2hex } from "./NodeUtils";
 import meshRedis from "./MeshRedis";
 import logger from "./Logger";
 import { DecodedPosition, decodedPositionToString } from "./MeshPacketCache";
