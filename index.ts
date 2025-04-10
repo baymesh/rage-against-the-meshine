@@ -8,7 +8,6 @@ import {
   User as DiscordUser,
   userMention,
 } from "discord.js";
-import { decrypt } from "./src/decrypt";
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
 import protobufjs from "protobufjs";
