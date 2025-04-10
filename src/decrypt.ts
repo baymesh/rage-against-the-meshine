@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Data } from "./MeshPacketCache";
+import { Data } from "protobufjs";
 
 const decryptionKeys = [
   "1PG7OiApB1nwvP+rz05pAQ==", // add default "AQ==" decryption key
