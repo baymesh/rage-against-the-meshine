@@ -5,7 +5,7 @@ import { meshRedis } from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
 import { logger } from "./Logger";
 
-const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES) => {
+const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES, MQTT_BROKER_URL) => {
   try {
     if (topic.includes("msh")) {
       if (!topic.includes("/json")) {

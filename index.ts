@@ -361,7 +361,7 @@ client.once("ready", () => {
   });
 
   mqttClient.on("message", async (topic, message) => {
-    await handleMqttMessage(topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES);
+    await handleMqttMessage(topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES, MQTT_BROKER_URL);
   });
 });
 
