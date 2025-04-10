@@ -1,9 +1,15 @@
+/**
+ * Interface representing the data structure of a decoded packet.
+ */
 export interface Data {
   portnum: number;
   payload: Buffer;
   replyId?: number;
 }
 
+/**
+ * Interface representing the structure of a mesh packet.
+ */
 export interface MeshPacket {
   from: number;
   to: number;
@@ -19,6 +25,9 @@ export interface MeshPacket {
   decoded: Data;
 }
 
+/**
+ * Interface representing the structure of a service envelope.
+ */
 export interface ServiceEnvelope {
   packet: MeshPacket;
   mqttTime: Date;
@@ -28,6 +37,9 @@ export interface ServiceEnvelope {
   mqttServer: string;
 }
 
+/**
+ * Interface representing a group of packets.
+ */
 export interface PacketGroup {
   id: number;
   time: Date;
@@ -55,83 +67,42 @@ export enum AltSource {
 // TypeScript interface for the raw decoded Position message.
 // Field names are in camelCase as output by protobufjs.
 export interface DecodedPosition {
-  // Optional: The new preferred location encoding (multiply by 1e-7 for degrees)
   latitudeI?: number;
-  // Optional: The new preferred location encoding (multiply by 1e-7 for degrees)
   longitudeI?: number;
-  // Optional: Altitude in meters above mean sea level
   altitude?: number;
-  // Seconds since 1970 (typically provided by the phone)
   time: number;
-  // How the location was acquired, as an enum value
   locationSource: LocSource;
-  // How the altitude was acquired, as an enum value
   altitudeSource: AltSource;
-  // Positional timestamp (actual GPS solution time) in epoch seconds
   timestamp: number;
-  // Milliseconds adjustment for the timestamp
   timestampMillisAdjust: number;
-  // Optional: HAE altitude in meters
   altitudeHae?: number;
-  // Optional: Geoidal separation in meters
   altitudeGeoidalSeparation?: number;
-  // Horizontal Dilution of Precision in 1/100 units
   PDOP: number;
-  // Horizontal Dilution of Precision in 1/100 units
   HDOP: number;
-  // Vertical Dilution of Precision in 1/100 units
   VDOP: number;
-  // GPS hardware accuracy constant in mm
   gpsAccuracy: number;
-  // Optional: Ground speed in m/s
   groundSpeed?: number;
-  // Optional: True North track in 1/100 degrees
   groundTrack?: number;
-  // GPS fix quality (e.g., from NMEA GxGGA)
   fixQuality: number;
-  // GPS fix type (2D/3D)
   fixType: number;
-  // Number of satellites in view
   satsInView: number;
-  // Sensor ID (in case multiple positioning sensors are used)
   sensorId: number;
-  // Estimated/expected time (in seconds) until the next update
   nextUpdate: number;
-  // Sequence number to help detect lost updates
   seqNumber: number;
-  // Indicates the bits of precision set by the sending node
   precisionBits: number;
 }
 
+/**
+ * Converts a decoded position object to a string representation.
+ * @param pos The decoded position object.
+ * @returns A string representation of the position.
+ */
 export function decodedPositionToString(pos: DecodedPosition): string {
   const parts: string[] = [];
 
-  // Latitude & Longitude (divide by 10,000,000 for degrees)
-  // if (pos.latitudeI !== undefined) {
-  //   parts.push(`Latitude: ${(pos.latitudeI / 10000000).toFixed(7)}°`);
-  // }
-  // if (pos.longitudeI !== undefined) {
-  //   parts.push(`Longitude: ${(pos.longitudeI / 10000000).toFixed(7)}°`);
-  // }
-
-  // if (pos.altitude !== undefined) {
-  //   parts.push(`Altitude: ${pos.altitude} m`);
-  // }
-
-  // Time is required (assuming it's in seconds since 1970)
   parts.push(`Time: ${new Date(pos.time * 1000).toISOString()}`);
-
-  // Enums for location and altitude source (assuming they have a reverse mapping)
   parts.push(`Location Source: ${LocSource[pos.locationSource]}`);
   parts.push(`Altitude Source: ${AltSource[pos.altitudeSource]}`);
-
-  // Timestamp of GPS solution
-  // parts.push(`GPS Timestamp: ${new Date(pos.timestamp * 1000).toISOString()}`);
-
-  // Only include millis adjustment if non-zero
-  // if (pos.timestampMillisAdjust !== 0) {
-  //   parts.push(`Timestamp Millis Adjust: ${pos.timestampMillisAdjust}`);
-  // }
 
   if (pos.altitudeHae !== undefined && pos.altitudeHae !== null) {
     parts.push(`Altitude HAE: ${pos.altitudeHae} m`);
@@ -155,7 +126,6 @@ export function decodedPositionToString(pos: DecodedPosition): string {
   }
 
   if (pos.groundTrack !== undefined && pos.groundTrack !== null) {
-    // groundTrack is in 1/100 degrees, convert to degrees
     parts.push(`Ground Track: ${(pos.groundTrack / 100).toFixed(2)}°`);
   }
 
@@ -165,36 +135,53 @@ export function decodedPositionToString(pos: DecodedPosition): string {
     parts.push(`Fix Type: ${pos.fixType}`);
   if ("satsInView" in pos && pos.satsInView !== 0)
     parts.push(`Satellites in View: ${pos.satsInView}`);
-  // parts.push(`Sensor ID: ${pos.sensorId}`);
-  // parts.push(`Next Update: ${pos.nextUpdate} s`);
-  // parts.push(`Sequence Number: ${pos.seqNumber}`);
   if ("precisionBits" in pos && pos.precisionBits !== 0)
     parts.push(`Precision Bits: ${pos.precisionBits}`);
 
   return parts.join("\n");
 }
 
+/**
+ * Class representing a cache for mesh packets.
+ */
 class MeshPacketCache {
-  queue: PacketGroup[];
+  private queue: PacketGroup[];
+  private static readonly ONE_HOUR_MS = 60 * 60 * 1000;
 
   constructor() {
     this.queue = [];
   }
 
+  /**
+   * Checks if a packet with the given ID exists in the cache.
+   * @param packetId The ID of the packet.
+   * @returns True if the packet exists, false otherwise.
+   */
   exists(packetId: number): boolean {
     return this.queue.some((packetGroup) => packetGroup.id === packetId);
   }
 
+  /**
+   * Gets the index of a packet group with the given ID.
+   * @param packetId The ID of the packet.
+   * @returns The index of the packet group, or -1 if not found.
+   */
   getIndex(packetId: number): number {
     return this.queue.findIndex((packetGroup) => packetGroup.id === packetId);
   }
 
+  /**
+   * Adds a service envelope to the cache.
+   * @param serviceEnvelope The service envelope to add.
+   * @param topic The MQTT topic.
+   * @param mqttServer The MQTT server.
+   */
   add(serviceEnvelope: ServiceEnvelope, topic: string, mqttServer: string) {
     serviceEnvelope.mqttTime = new Date();
     serviceEnvelope.topic = topic;
     serviceEnvelope.mqttServer = mqttServer;
-    const grouptIndex = this.getIndex(serviceEnvelope.packet.id);
-    if (grouptIndex === -1) {
+    const groupIndex = this.getIndex(serviceEnvelope.packet.id);
+    if (groupIndex === -1) {
       this.queue.push({
         id: serviceEnvelope.packet.id,
         time: serviceEnvelope.mqttTime,
@@ -203,24 +190,34 @@ class MeshPacketCache {
         serviceEnvelopes: [serviceEnvelope],
       });
     } else {
-      this.queue[grouptIndex].serviceEnvelopes.push(serviceEnvelope);
-      this.queue[grouptIndex].dirty = true;
+      this.queue[groupIndex].serviceEnvelopes.push(serviceEnvelope);
+      this.queue[groupIndex].dirty = true;
     }
   }
 
+  /**
+   * Gets the packet groups that are marked as dirty.
+   * @returns An array of dirty packet groups.
+   */
   getDirtyPacketGroups(): PacketGroup[] {
-    const dirties = this.queue.filter((packetGroup) => packetGroup.dirty);
-    dirties.forEach((packetGroup) => {
+    const dirtyPacketGroups = this.queue.filter(
+      (packetGroup) => packetGroup.dirty,
+    );
+    dirtyPacketGroups.forEach((packetGroup) => {
       packetGroup.dirty = false;
     });
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const oneHourAgo = new Date(Date.now() - MeshPacketCache.ONE_HOUR_MS);
     this.queue = this.queue.filter(
       (packetGroup) => packetGroup.time.getTime() >= oneHourAgo.getTime(),
     );
-    return dirties;
+    return dirtyPacketGroups;
   }
 
-  size() {
+  /**
+   * Gets the size of the cache.
+   * @returns The number of packet groups in the cache.
+   */
+  size(): number {
     return this.queue.length;
   }
 }
