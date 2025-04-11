@@ -30,6 +30,13 @@ const processTextMessage = async (packetGroup, client, guild, discordMessageIdCa
 
   const nodeId = nodeId2hex(packet.from);
 
+  // Check if the node is banned
+  const isBannedNode = await meshRedis.isBannedNode(nodeId);
+  if (isBannedNode) {
+    logger.info(`Node ${nodeId} is banned. Ignoring message.`);
+    return;
+  }
+
   const balloonNode = await meshRedis.isBalloonNode(nodeId);
 
   const content = await createDiscordMessage(packetGroup, text, balloonNode, client, guild);

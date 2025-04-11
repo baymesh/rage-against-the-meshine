@@ -74,23 +74,30 @@ const commands = [
       },
     ],
   },
-  // {
-  //   name: "mynodes",
-  //   description: "List your linked nodes",
-  //   options: [],
-  // },
-  // {
-  //   name: "bannode",
-  //   description: "Ban a node from logger",
-  //   options: [
-  //     {
-  //       name: "nodeid",
-  //       type: ApplicationCommandOptionType.String,
-  //       description: "The node ID to ban",
-  //       required: true,
-  //     },
-  //   ],
-  // },
+  {
+    name: "bannode",
+    description: "Ban a node from logger",
+    options: [
+      {
+        name: "nodeid",
+        type: ApplicationCommandOptionType.String,
+        description: "The node ID to ban",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "unbannode",
+    description: "Unban a node from logger",
+    options: [
+      {
+        name: "nodeid",
+        type: ApplicationCommandOptionType.String,
+        description: "The node ID to unban",
+        required: true,
+      },
+    ],
+  },
 ];
 
 export default commands;

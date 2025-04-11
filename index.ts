@@ -302,16 +302,59 @@ client.once("ready", () => {
         });
       }
     } else if (interaction.commandName === "bannode") {
-      // Get the nodeid argument.
-      const nodeId = interaction.options.getString("nodeid");
+      const roles = await fetchUserRoles(guild, interaction.user.id);
+      if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
+        let nodeId = fetchNodeId(interaction);
 
-      // add node to the banned list
+        if (!nodeId) {
+          logger.warn("Received /bannode command with no nodeid");
+          await interaction.reply({
+            content: "Please provide a nodeid",
+            ephemeral: true,
+          });
+          return;
+        }
 
-      // Respond to the command to acknowledge receipt (ephemeral response).
-      await interaction.reply({
-        content: "Ban Command received!",
-        flags: MessageFlags.Ephemeral,
-      });
+        await meshRedis.addBannedNode(nodeId);
+
+        await interaction.reply({
+          content: "Node banned.",
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          content: "You do not have permission to use this command",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    } else if (interaction.commandName === "unbannode") {
+      const roles = await fetchUserRoles(guild, interaction.user.id);
+      if (roles && (roles.includes("Moderator") || roles.includes("Admin"))) {
+        let nodeId = fetchNodeId(interaction);
+
+        if (!nodeId) {
+          logger.warn("Received /unbannode command with no nodeid");
+          await interaction.reply({
+            content: "Please provide a nodeid",
+            ephemeral: true,
+          });
+          return;
+        }
+
+        await meshRedis.removeBannedNode(nodeId);
+
+        await interaction.reply({
+          content: "Node unbanned.",
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          content: "You do not have permission to use this command",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
     }
   });
 

@@ -268,6 +268,64 @@ class MeshRedis {
     }
     return null;
   }
+
+  async addBannedNode(hexNodeId: string) {
+    try {
+      if (!hexNodeId || hexNodeId.length != "dd0b9347".length) {
+        return "Invalid Node Id";
+      }
+      const bannedNode = await this.redisClient.get(
+        `baymesh:banned:${hexNodeId}`,
+      );
+      if (bannedNode) {
+        logger.info(`Node ${hexNodeId} is already banned`);
+        return `Node ${hexNodeId} is already banned`;
+      }
+      await this.redisClient.set(`baymesh:banned:${hexNodeId}`, "1");
+      return `Node ${hexNodeId} banned`;
+    } catch (err) {
+      logger.error(err.message);
+      return "Error";
+    }
+  }
+
+  async removeBannedNode(hexNodeId: string) {
+    try {
+      if (!hexNodeId || hexNodeId.length != "dd0b9347".length) {
+        return "Invalid Node Id";
+      }
+      const bannedNode = await this.redisClient.get(
+        `baymesh:banned:${hexNodeId}`,
+      );
+      if (!bannedNode) {
+        logger.info(`Node ${hexNodeId} is not banned`);
+        return `Node ${hexNodeId} is not banned`;
+      }
+      await this.redisClient.del(`baymesh:banned:${hexNodeId}`);
+      return `Node ${hexNodeId} unbanned`;
+    } catch (err) {
+      logger.error(err.message);
+      return "Error";
+    }
+  }
+
+  async isBannedNode(hexNodeId: string) {
+    try {
+      if (!hexNodeId || hexNodeId.length != "dd0b9347".length) {
+        return false;
+      }
+      const bannedNode = await this.redisClient.get(
+        `baymesh:banned:${hexNodeId}`,
+      );
+      if (bannedNode) {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      logger.error(err.message);
+      return false;
+    }
+  }
 }
 
 const meshRedis = new MeshRedis();
