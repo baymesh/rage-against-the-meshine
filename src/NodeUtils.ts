@@ -29,10 +29,12 @@ const validateNodeId = (nodeId: string): string | null => {
   return null;
 };
 
+const MESHVIEW_BASE_URL = process.env.MESHVIEW_BASE_URL;
+
 const fetchNodeId = (interaction: any): string | null => {
   let nodeId = interaction.options
     .getString("nodeid")
-    .replace("https://meshview.bayme.sh/packet_list/", "")
+    .replace(`${MESHVIEW_BASE_URL}/packet_list/`, "")
     .replace("!", "")
     .trim();
 

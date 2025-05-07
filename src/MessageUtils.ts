@@ -3,6 +3,8 @@ import { createDiscordMessage } from "./DiscordMessageUtils";
 import meshRedis from "./MeshRedis";
 import logger from "./Logger";
 
+const MESHVIEW_BASE_URL = process.env.MESHVIEW_BASE_URL;
+
 const processTextMessage = async (packetGroup, client, guild, discordMessageIdCache, habChannel, msChannel, lfChannel) => {
   const packet = packetGroup.serviceEnvelopes[0].packet;
   let text = packet.decoded.payload.toString();

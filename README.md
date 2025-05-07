@@ -50,6 +50,7 @@ Rage Against the Meshine is a TypeScript application that bridges Meshtastic mes
 | `REDIS_URL` | URL to the Redis server |
 | `ENVIRONMENT` | Deployment environment (e.g., "production", "development") |
 | `NODE_INFO_UPDATES` | Enable/disable node information updates (1 or 0) |
+| `MESHVIEW_BASE_URL` | Base URL for Meshview |
 
 ### Installation
 
@@ -74,6 +75,7 @@ Rage Against the Meshine is a TypeScript application that bridges Meshtastic mes
    REDIS_URL=redis://your-redis-url:6379
    ENVIRONMENT=production
    NODE_INFO_UPDATES=1
+   MESHVIEW_BASE_URL=https://meshview.bayme.sh
    ```
 
 3. Start the application with Docker Compose:
