@@ -4,9 +4,6 @@ import {
   REST,
   Routes,
   MessageFlags,
-  GuildMember,
-  User as DiscordUser,
-  userMention,
 } from "discord.js";
 import { fileURLToPath } from "url";
 import path, { dirname } from "path";
@@ -15,20 +12,26 @@ import crypto from "crypto";
 import mqtt from "mqtt";
 
 import FifoCache from "./src/FifoCache";
-import MeshPacketCache, {
-  PacketGroup,
-  DecodedPosition,
-  decodedPositionToString,
-} from "./src/MeshPacketCache";
+import MeshPacketCache from "./src/MeshPacketCache";
 import meshRedis from "./src/MeshRedis";
 import logger from "./src/Logger";
 import Commands from "./src/Commands";
-import { nodeHex2id, nodeId2hex, fetchNodeId } from "./src/NodeUtils";
-import { createDiscordMessage } from "./src/DiscordMessageUtils";
+import { fetchNodeId } from "./src/NodeUtils";
 import { fetchUserRoles, fetchDiscordChannel } from "./src/DiscordUtils";
 import { processTextMessage } from "./src/MessageUtils";
 import { handleMqttMessage } from "./src/MqttUtils";
-import { MESHVIEW_BASE_URL } from "./src/config";
+import {
+  MQTT_BROKER_URL,
+  REDIS_URL,
+  NODE_INFO_UPDATES,
+  DISCORD_CLIENT_ID,
+  DISCORD_TOKEN,
+  DISCORD_GUILD,
+  DISCORD_CHANNEL_LF,
+  DISCORD_CHANNEL_MS,
+  DISCORD_CHANNEL_HAB,
+  MQTT_TOPICS,
+} from "./src/config";
 
 // generate a pseduo uuid kinda thing to use as an instance id
 const INSTANCE_ID = (() => {
@@ -37,17 +40,6 @@ const INSTANCE_ID = (() => {
 logger.init(INSTANCE_ID);
 
 logger.info("Starting Mesh Logger");
-
-const DISCORD_CLIENT_ID = process.env["DISCORD_CLIENT_ID"];
-const DISCORD_TOKEN = process.env["DISCORD_TOKEN"];
-const DISCORD_GUILD = process.env["DISCORD_GUILD"];
-const DISCORD_CHANNEL_LF = process.env["DISCORD_CHANNEL_LF"];
-const DISCORD_CHANNEL_MS = process.env["DISCORD_CHANNEL_MS"];
-const DISCORD_CHANNEL_HAB = process.env["DISCORD_CHANNEL_HAB"];
-const REDIS_URL = process.env["REDIS_URL"];
-const NODE_INFO_UPDATES = process.env["NODE_INFO_UPDATES"] === "1";
-const MQTT_BROKER_URL = process.env["MQTT_BROKER_URL"];
-const MQTT_TOPICS = JSON.parse(process.env["MQTT_TOPICS"] || "[]");
 
 if (MQTT_BROKER_URL === undefined || MQTT_BROKER_URL.length === 0) {
   throw new Error("MQTT_BROKER_URL is not set");
@@ -374,7 +366,15 @@ client.once("ready", () => {
             packetGroup.serviceEnvelopes[0].packet.decoded.payload.toString(),
         );
       }
-      processTextMessage(packetGroup, client, guild, discordMessageIdCache, habChannel, msChannel, lfChannel);
+      processTextMessage(
+        packetGroup,
+        client,
+        guild,
+        discordMessageIdCache,
+        habChannel,
+        msChannel,
+        lfChannel,
+      );
     });
   }, 5000);
 
@@ -395,7 +395,14 @@ client.once("ready", () => {
   });
 
   mqttClient.on("message", async (topic, message) => {
-    await handleMqttMessage(topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES, MQTT_BROKER_URL);
+    await handleMqttMessage(
+      topic,
+      message,
+      MQTT_TOPICS,
+      meshPacketCache,
+      NODE_INFO_UPDATES,
+      MQTT_BROKER_URL,
+    );
   });
 });
 
