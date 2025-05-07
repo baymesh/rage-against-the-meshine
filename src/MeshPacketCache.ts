@@ -1,5 +1,3 @@
-const MESHVIEW_BASE_URL = process.env.MESHVIEW_BASE_URL;
-
 /**
  * Interface representing the data structure of a decoded packet.
  */
