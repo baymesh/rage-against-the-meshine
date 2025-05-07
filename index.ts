@@ -28,6 +28,7 @@ import { createDiscordMessage } from "./src/DiscordMessageUtils";
 import { fetchUserRoles, fetchDiscordChannel } from "./src/DiscordUtils";
 import { processTextMessage } from "./src/MessageUtils";
 import { handleMqttMessage } from "./src/MqttUtils";
+import { MESHVIEW_BASE_URL } from "./src/config";
 
 // generate a pseduo uuid kinda thing to use as an instance id
 const INSTANCE_ID = (() => {

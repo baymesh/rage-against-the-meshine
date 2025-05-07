@@ -3,8 +3,7 @@ import { nodeHex2id, nodeId2hex } from "./NodeUtils";
 import meshRedis from "./MeshRedis";
 import logger from "./Logger";
 import { DecodedPosition, decodedPositionToString } from "./MeshPacketCache";
-
-const MESHVIEW_BASE_URL = process.env.MESHVIEW_BASE_URL;
+import { MESHVIEW_BASE_URL } from "./config";
 
 export const createDiscordMessage = async (packetGroup, text, balloonNode, client, guild) => {
   try {

@@ -1,3 +1,5 @@
+import { MESHVIEW_BASE_URL } from "./config";
+
 const nodeId2hex = (nodeId: string | number) => {
   return typeof nodeId === "number"
     ? nodeId.toString(16).padStart(8, "0")
@@ -28,8 +30,6 @@ const validateNodeId = (nodeId: string): string | null => {
 
   return null;
 };
-
-const MESHVIEW_BASE_URL = process.env.MESHVIEW_BASE_URL;
 
 const fetchNodeId = (interaction: any): string | null => {
   let nodeId = interaction.options
