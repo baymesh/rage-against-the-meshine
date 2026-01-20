@@ -46,6 +46,8 @@ Rage Against the Meshine is a TypeScript application that bridges Meshtastic mes
 | `DISCORD_CHANNEL_MS` | Discord channel ID for MediumSlow modem messages |
 | `DISCORD_CHANNEL_HAB` | Discord channel ID for High Altitude Balloon messages |
 | `MQTT_BROKER_URL` | URL to the MQTT broker |
+| `MQTT_USERNAME` | Username for the MQTT broker |
+| `MQTT_PASSWORD` | Password for the MQTT broker |
 | `MQTT_TOPICS` | JSON array of MQTT topics to subscribe to |
 | `REDIS_URL` | URL to the Redis server |
 | `ENVIRONMENT` | Deployment environment (e.g., "production", "development") |

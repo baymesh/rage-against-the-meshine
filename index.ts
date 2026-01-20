@@ -47,6 +47,8 @@ const REDIS_URL = process.env["REDIS_URL"];
 const NODE_INFO_UPDATES = process.env["NODE_INFO_UPDATES"] === "1";
 const MQTT_BROKER_URL = process.env["MQTT_BROKER_URL"];
 const MQTT_TOPICS = JSON.parse(process.env["MQTT_TOPICS"] || "[]");
+const MQTT_USERNAME = JSON.parse(process.env["MQTT_USERNAME"] || "meshdev");
+const MQTT_PASSWORD = JSON.parse(process.env["MQTT_PASSWORD"] || "large4cats");
 
 if (MQTT_BROKER_URL === undefined || MQTT_BROKER_URL.length === 0) {
   throw new Error("MQTT_BROKER_URL is not set");
@@ -131,8 +133,8 @@ client.once("ready", () => {
 
   // Connect to the MQTT broker.
   const mqttClient = mqtt.connect(MQTT_BROKER_URL, {
-    username: "meshdev",
-    password: "large4cats",
+    username: MQTT_USERNAME,
+    password: MQTT_PASSWORD,
   });
 
   client.on("interactionCreate", async (interaction) => {
