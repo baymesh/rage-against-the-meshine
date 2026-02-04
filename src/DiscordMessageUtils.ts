@@ -1,11 +1,18 @@
-import { GuildMember, User as DiscordUser, userMention } from "discord.js";
+import { userMention } from "discord.js";
 import { nodeHex2id, nodeId2hex } from "./NodeUtils";
-import meshRedis from "./MeshRedis";
+import { Position } from "./Protobufs";
 import logger from "./Logger";
 import { DecodedPosition, decodedPositionToString } from "./MeshPacketCache";
-import { MESHVIEW_BASE_URL } from "./config";
+import type { MeshRedis } from "./MeshRedis";
 
-export const createDiscordMessage = async (packetGroup, text, balloonNode, client, guild) => {
+export const createDiscordMessage = async (
+  packetGroup: any,
+  text: string,
+  client: any,
+  guild: any,
+  meshRedis: MeshRedis,
+  meshViewBaseUrl: string,
+) => {
   try {
     const packet = packetGroup.serviceEnvelopes[0].packet;
     const from = nodeId2hex(packet.from);
@@ -15,14 +22,14 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
     let nodeInfos = await meshRedis.getNodeInfos(
       packetGroup.serviceEnvelopes
-        .map((se) => se.gatewayId.replace("!", ""))
+        .map((se: any) => se.gatewayId.replace("!", ""))
         .concat(from),
       false,
     );
 
     let avatarUrl = "https://cdn.discordapp.com/embed/avatars/0.png";
 
-    const maxHopStart = packetGroup.serviceEnvelopes.reduce((acc, se) => {
+    const maxHopStart = packetGroup.serviceEnvelopes.reduce((acc: number, se: any) => {
       const hopStart = se.packet.hopStart;
       return hopStart > acc ? hopStart : acc;
     }, 0);
@@ -31,12 +38,12 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
     logger.info(`nodeIdHex: ${nodeIdHex}, discordUserId: ${discordUserId}`);
     let ownerField;
     if (discordUserId) {
-      let guildUser: GuildMember | DiscordUser | undefined;
-      const user: DiscordUser = await client.users.fetch(discordUserId);
+      let guildUser: any;
+      const user: any = await client.users.fetch(discordUserId);
       try {
         guildUser = await guild.members.fetch(discordUserId);
       } catch (e) {
-        logger.error(e);
+        logger.error(String(e));
       }
       if (!guildUser) {
         logger.error(
@@ -56,7 +63,7 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
     }
 
     const gatewayCount = packetGroup.serviceEnvelopes.filter(
-      (value, index, self) =>
+      (value: any, index: number, self: any[]) =>
         self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
     ).length;
 
@@ -73,12 +80,12 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
       infoFields.push({
         name: "Latitude",
-        value: `${position.latitudeI / 10000000}`,
+        value: `${(position.latitudeI ?? 0) / 10000000}`,
         inline: true,
       });
       infoFields.push({
         name: "Longitude",
-        value: `${position.longitudeI / 10000000}`,
+        value: `${(position.longitudeI ?? 0) / 10000000}`,
         inline: true,
       });
       if (position.altitude) {
@@ -89,14 +96,14 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
         });
       }
 
-      logger.info(position);
+      logger.info(JSON.stringify(position));
 
       try {
         msgText = decodedPositionToString(position);
       } catch (e) {
-        logger.error(e);
+        logger.error(String(e));
       }
-      mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${position.latitudeI / 10000000}&lon=${position.longitudeI / 10000000}&width=400&height=400&zoom=12`;
+      mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${(position.latitudeI ?? 0) / 10000000}&lon=${(position.longitudeI ?? 0) / 10000000}&width=400&height=400&zoom=12`;
     }
 
     logger.info(mapUrl);
@@ -111,17 +118,9 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
     infoFields.push({
       name: "Packet",
-      value: `[${packetGroup.id.toString(16)}](${MESHVIEW_BASE_URL}/packet/${packetGroup.id})`,
+      value: `[${packetGroup.id.toString(16)}](${meshViewBaseUrl}/packet/${packetGroup.id})`,
       inline: true,
     });
-
-    if (balloonNode) {
-      infoFields.push({
-        name: "Channel",
-        value: `${packetGroup.serviceEnvelopes[0].channelId}`,
-        inline: true,
-      });
-    }
 
     infoFields.push({
       name: "Hop Limit",
@@ -134,14 +133,14 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
       inline: true,
     });
 
-    const gatewayGroups = {};
+    const gatewayGroups: Record<string, string[]> = {};
 
     packetGroup.serviceEnvelopes
       .filter(
-        (value, index, self) =>
+        (value: any, index: number, self: any[]) =>
           self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
       )
-      .forEach((envelope) => {
+        .forEach((envelope: any) => {
         const gatewayDelay =
           envelope.mqttTime.getTime() - packetGroup.time.getTime();
         let gatewayDisplayName = envelope.gatewayId.replace("!", "");
@@ -190,7 +189,7 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
         const gatewayFieldText =
           `[${gatewayDisplayName} ${hopText}` +
-          `](${MESHVIEW_BASE_URL}/packet_list/${nodeHex2id(envelope.gatewayId.replace("!", ""))})`;
+          `](${meshViewBaseUrl}/packet_list/${nodeHex2id(envelope.gatewayId.replace("!", ""))})`;
 
         if (!gatewayGroups[hopGroup]) {
           gatewayGroups[hopGroup] = [];
@@ -203,7 +202,7 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
       .sort((a, b) => {
         if (a === "Unknown Hops") return 1;
         if (b === "Unknown Hops") return -1;
-        return a - b;
+        return Number(a) - Number(b);
       })
       .forEach((hop) => {
         const baseName =
@@ -248,19 +247,19 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
         }
       });
 
-    const content = {
+    const content: any = {
       username: "Mesh Bot",
       avatar_url:
         "https://cdn.discordapp.com/app-icons/1240017058046152845/295e77bec5f9a44f7311cf8723e9c332.png",
       embeds: [
         {
-          url: `${MESHVIEW_BASE_URL}/packet_list/${packet.from}`,
+          url: `${meshViewBaseUrl}/packet_list/${packet.from}`,
           color: 6810260,
           timestamp: new Date(packet.rxTime * 1000).toISOString(),
 
           author: {
             name: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].longName : "Unknown"}`,
-            url: `${MESHVIEW_BASE_URL}/packet_list/${packet.from}`,
+            url: `${meshViewBaseUrl}/packet_list/${packet.from}`,
             icon_url: avatarUrl,
           },
           title: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].shortName : "UNK"}`,

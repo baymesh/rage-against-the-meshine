@@ -1,19 +1,32 @@
+import process from "node:process";
 import { nodeId2hex } from "./NodeUtils";
 import { createDiscordMessage } from "./DiscordMessageUtils";
-import meshRedis from "./MeshRedis";
 import logger from "./Logger";
+import type { CompiledChannelRegexRule } from "./MultiMeshConfig";
+import type { MeshRedis } from "./MeshRedis";
 
-const processTextMessage = async (
-  packetGroup,
-  client,
-  guild,
-  discordMessageIdCache,
-  habChannel,
-  msChannel,
-  lfChannel,
-  mfChannel,
-  mfTestChannel,
-) => {
+type MessageRoutingContext = {
+  client: any;
+  guild: any;
+  discordMessageIdCache: any;
+  channelRegexRules: CompiledChannelRegexRule[];
+  resolveChannelById: (channelId: string) => any | null;
+  meshRedis: MeshRedis;
+  meshViewBaseUrl: string;
+  meshId: string;
+};
+
+const processTextMessage = async (packetGroup: any, context: MessageRoutingContext) => {
+  const {
+    client,
+    guild,
+    discordMessageIdCache,
+    channelRegexRules,
+    resolveChannelById,
+    meshRedis,
+    meshViewBaseUrl,
+    meshId,
+  } = context;
   const packet = packetGroup.serviceEnvelopes[0].packet;
   let text = packet.decoded.payload.toString();
   const to = nodeId2hex(packet.to);
@@ -30,7 +43,7 @@ const processTextMessage = async (
 
   if (process.env.ENVIRONMENT === "production" && to !== "ffffffff") {
     logger.info(
-      `MessageId: ${packetGroup.id} Not to public channel: ${packetGroup.serviceEnvelopes.map((envelope) => envelope.topic)}`,
+      `MessageId: ${packetGroup.id} Not to public channel: ${packetGroup.serviceEnvelopes.map((envelope: any) => envelope.topic)}`,
     );
     return;
   }
@@ -47,56 +60,36 @@ const processTextMessage = async (
     return;
   }
 
-  const balloonNode = await meshRedis.isBalloonNode(nodeId);
-
   const content = await createDiscordMessage(
     packetGroup,
     text,
-    balloonNode,
     client,
     guild,
+    meshRedis,
+    meshViewBaseUrl,
   );
 
-  const getDiscordChannel = async (balloonNode, channelId, topic) => {
-    // if (topic.startsWith("msh/ US/ham")) {
-    //   return hamventionChannel;
-    // }
-    if (balloonNode) {
-      return habChannel;
+  const channelId = packetGroup.serviceEnvelopes[0].channelId;
+  const matchedRule = channelRegexRules.find((rule) => {
+    const matched = rule.regex.test(channelId);
+    if (rule.regex.global) {
+      rule.regex.lastIndex = 0;
     }
-    if (channelId === "MediumSlow") {
-      return msChannel;
-    } else if (channelId === "MediumFast") {
-      return mfChannel;
-    } else if (channelId === "LongFast") {
-      return lfChannel;
-    } else if (channelId === "HAB") {
-      return habChannel;
-    } else if (channelId.trim() === "Test") {
-      return mfTestChannel;
-    } else {
-      logger.warn(
-        "Unknown channelId: '" +
-          channelId +
-          "', packetId: " +
-          packet.id.toString() +
-          " , message: " +
-          text,
-      );
-      return null;
-    }
-  };
+    return matched;
+  });
 
-  let discordChannel = await getDiscordChannel(
-    balloonNode,
-    packetGroup.serviceEnvelopes[0].channelId,
-    packetGroup.serviceEnvelopes[0].topic,
-  );
-
-  if (discordChannel === null) {
+  if (!matchedRule) {
     logger.warn(
-      "No discord channel found for channelId: " +
-        packetGroup.serviceEnvelopes[0].channelId,
+      `[mesh:${meshId}] No regex match for channelId '${channelId}', packetId: ${packet.id.toString()}`,
+    );
+    return;
+  }
+
+  const discordChannel = resolveChannelById(matchedRule.discordChannelId);
+
+  if (!discordChannel) {
+    logger.warn(
+      `[mesh:${meshId}] No discord channel found for id: ${matchedRule.discordChannelId}`,
     );
     return;
   }

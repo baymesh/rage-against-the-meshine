@@ -1,17 +1,18 @@
-import { ServiceEnvelope, Position, User } from "../index";
+import { ServiceEnvelope, Position, User } from "./Protobufs";
 import MeshPacketCache from "./MeshPacketCache";
 import { decrypt } from "./decrypt";
-import meshRedis from "./MeshRedis";
+import type { MeshRedis } from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
 import logger from "./Logger";
 
 const handleMqttMessage = async (
   topic,
   message,
-  MQTT_TOPICS,
-  meshPacketCache,
-  NODE_INFO_UPDATES,
-  MQTT_BROKER_URL,
+  mqttTopics: string[],
+  meshPacketCache: MeshPacketCache,
+  nodeInfoUpdates: boolean,
+  mqttBrokerUrl: string,
+  meshRedis: MeshRedis,
 ) => {
   try {
     if (topic.includes("msh")) {
@@ -38,7 +39,7 @@ const handleMqttMessage = async (
         }
 
         if (
-          MQTT_TOPICS.some((t) => {
+          mqttTopics.some((t) => {
             return topic.startsWith(t);
           }) ||
           meshPacketCache.exists(envelope.packet.id)
@@ -52,7 +53,7 @@ const handleMqttMessage = async (
           }
           const portnum = envelope.packet?.decoded?.portnum;
           if (portnum === 1) {
-            meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
+            meshPacketCache.add(envelope, topic, mqttBrokerUrl);
           } else if (portnum === 3) {
             const from = envelope.packet.from.toString(16);
             const isTrackerNode = await meshRedis.isTrackerNode(from);
@@ -64,9 +65,9 @@ const handleMqttMessage = async (
             if (!position.latitudeI && !position.longitudeI) {
               return;
             }
-            meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
+            meshPacketCache.add(envelope, topic, mqttBrokerUrl);
           } else if (portnum === 4) {
-            if (!NODE_INFO_UPDATES) {
+            if (!nodeInfoUpdates) {
               // logger.debug("Node info updates disabled");
               return;
             }

@@ -2,30 +2,30 @@
 
 ![ratm2_demo](https://github.com/user-attachments/assets/a9c1fab9-2bc8-462b-8c41-18d092704b79)
 
-A Discord bot for Meshtastic network integration, enabling communication between Meshtastic mesh networks and Discord channels. It is the sucessor to the original bot: https://github.com/baymesh/ratm-meshtastic-discord-bot
+A Discord bot for Meshtastic network integration. It bridges Meshtastic MQTT traffic into Discord channels and supports multiple meshes in a single instance. It is the successor to the original bot: https://github.com/baymesh/ratm-meshtastic-discord-bot
 
-## 📝 Project Overview
+## Project Overview
 
-Rage Against the Meshine is a TypeScript application that bridges Meshtastic mesh networks with Discord. It monitors MQTT topics for Meshtastic packet data, processes various packet types (position, text messages), and forwards communications to designated Discord channels. The application also provides Discord commands for managing nodes, tracking devices, and moderating the network.
+Rage Against the Meshine is a TypeScript application that bridges Meshtastic mesh networks with Discord. It monitors MQTT topics for Meshtastic packet data, processes text and position packets, and forwards messages to Discord channels based on routing rules. The application also provides Discord commands for managing nodes, tracking devices, and moderating the network.
 
-## ✨ Features
+## Features
 
-- **Text Messaging**: Bridge text messages between Meshtastic nodes and Discord channels
-- **Position Tracking**: Track and display position updates from designated tracker and balloon nodes
-- **Node Management**: Link/unlink Meshtastic nodes to Discord users
-- **Moderation Tools**: Ban/unban problematic nodes from the bridge
-- **Tracker and Balloon Node Designation**: Special handling for tracking devices and high-altitude balloon payloads
+- Text messaging bridge from Meshtastic to Discord
+- Position updates for tracker and balloon nodes
+- Node management commands to link and unlink nodes
+- Moderation commands to ban and unban nodes
+- Multi mesh support with per mesh MQTT and Discord clients
 
-## 🛠️ Technology Stack
+## Technology Stack
 
-- **TypeScript**: Main programming language
-- **Discord.js**: Discord API integration
-- **MQTT**: Message broker for receiving Meshtastic packets
-- **Redis**: Persistent storage for node information and configuration
-- **Protobuf**: Data serialization for Meshtastic packets
-- **Docker**: Containerization for deployment
+- TypeScript
+- Discord.js
+- MQTT
+- Redis
+- Protobuf
+- Docker
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -35,22 +35,79 @@ Rage Against the Meshine is a TypeScript application that bridges Meshtastic mes
 - Discord bot token and application ID
 - Discord server (guild) with appropriate channels set up
 
+### Configuration
+
+Runtime configuration is loaded from config.json and optional secrets.json.
+
+config.json (example):
+```json
+{
+   "environment": "prod",
+   "nodeInfoUpdates": true,
+   "meshes": [
+      {
+         "id": "baymesh",
+         "name": "Bay Area Mesh",
+         "meshViewBaseUrl": "https://meshview.bayme.sh",
+         "mqtt": {
+            "brokerUrl": "mqtt://broker1:1883",
+            "topics": ["msh/US/#"]
+         },
+         "discord": {
+            "clientId": "abc123",
+            "guildId": "1234567890"
+         },
+         "routing": {
+            "channelRegex": [
+               { "pattern": "LongFast", "discordChannelId": "123" },
+               { "pattern": "MediumFast", "discordChannelId": "456" },
+               { "pattern": "MediumSlow", "discordChannelId": "789" },
+               { "pattern": "^Test$", "discordChannelId": "234" },
+               { "pattern": "HAB", "discordChannelId": "345" }
+            ]
+         }
+      }
+   ]
+}
+```
+
+secrets.json (example):
+```json
+{
+   "meshes": [
+      {
+         "id": "baymesh",
+         "discordToken": "def456"
+      }
+   ]
+}
+```
+
+Notes:
+- CONFIG_PATH and SECRETS_PATH can override default file locations.
+- Routing rules are regex matches against Meshtastic channelId. First match wins.
+- meshViewBaseUrl is set per mesh to generate links.
+
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `DISCORD_TOKEN` | Discord bot authentication token |
-| `DISCORD_CLIENT_ID` | Discord application client ID |
-| `DISCORD_GUILD` | Discord server (guild) ID |
-| `DISCORD_CHANNEL_LF` | Discord channel ID for LongFast modem messages |
-| `DISCORD_CHANNEL_MS` | Discord channel ID for MediumSlow modem messages |
-| `DISCORD_CHANNEL_HAB` | Discord channel ID for High Altitude Balloon messages |
-| `MQTT_BROKER_URL` | URL to the MQTT broker |
-| `MQTT_TOPICS` | JSON array of MQTT topics to subscribe to |
-| `REDIS_URL` | URL to the Redis server |
-| `ENVIRONMENT` | Deployment environment (e.g., "production", "development") |
-| `NODE_INFO_UPDATES` | Enable/disable node information updates (1 or 0) |
-| `MESHVIEW_BASE_URL` | Base URL for Meshview |
+| `CONFIG_PATH` | Path to config.json (optional) |
+| `SECRETS_PATH` | Path to secrets.json (optional) |
+| `REDIS_URL` | Redis URL |
+| `MQTT_BROKER_URL` | MQTT broker URL (legacy fallback) |
+| `MQTT_TOPICS` | JSON array of MQTT topics (legacy fallback) |
+| `DISCORD_TOKEN` | Discord token (legacy fallback) |
+| `DISCORD_CLIENT_ID` | Discord client id (legacy fallback) |
+| `DISCORD_GUILD` | Discord guild id (legacy fallback) |
+| `DISCORD_CHANNEL_LF` | LongFast channel id (legacy fallback) |
+| `DISCORD_CHANNEL_MF` | MediumFast channel id (legacy fallback) |
+| `DISCORD_CHANNEL_MS` | MediumSlow channel id (legacy fallback) |
+| `DISCORD_CHANNEL_MF_TEST` | Test channel id (legacy fallback) |
+| `DISCORD_CHANNEL_HAB` | HAB channel id (legacy fallback) |
+| `ENVIRONMENT` | Deployment environment (production or development) |
+| `NODE_INFO_UPDATES` | Enable node info updates (1 or 0) |
+| `MESHVIEW_BASE_URL` | Meshview base URL (legacy fallback) |
 
 ### Installation
 
@@ -62,23 +119,38 @@ Rage Against the Meshine is a TypeScript application that bridges Meshtastic mes
    cd rage-against-the-meshine-nextgen
    ```
 
-2. Create a `.env` file with the required environment variables:
+2. Create config.json and secrets.json:
    ```
-   DISCORD_TOKEN=your_discord_token
-   DISCORD_CLIENT_ID=your_client_id
-   DISCORD_GUILD=your_guild_id
-   DISCORD_CHANNEL_LF=your_lf_channel_id
-   DISCORD_CHANNEL_MS=your_ms_channel_id
-   DISCORD_CHANNEL_HAB=your_hab_channel_id
-   MQTT_BROKER_URL=mqtt://your-broker-url:1883
-   MQTT_TOPICS=["msh/US/topic1", "msh/US/topic2"]
-   REDIS_URL=redis://your-redis-url:6379
-   ENVIRONMENT=production
-   NODE_INFO_UPDATES=1
-   MESHVIEW_BASE_URL=https://meshview.bayme.sh
+    # config.json
+    {
+       "environment": "production",
+       "nodeInfoUpdates": true,
+       "meshes": [
+          {
+             "id": "pnw",
+             "meshViewBaseUrl": "https://meshview.bayme.sh",
+             "mqtt": { "brokerUrl": "mqtt://your-broker-url:1883", "topics": ["msh/US/#"] },
+             "discord": { "clientId": "${DISCORD_CLIENT_ID_PNW}", "guildId": "your_guild_id" },
+             "routing": { "channelRegex": [ { "pattern": "LongFast", "discordChannelId": "your_lf_channel_id" } ] }
+          }
+       ]
+    }
+
+    # secrets.json
+    {
+       "meshes": [
+          { "id": "pnw", "discordToken": "${DISCORD_TOKEN_PNW}" }
+       ]
+    }
    ```
 
-3. Start the application with Docker Compose:
+3. Create a .env file only for secret placeholders:
+    ```
+    DISCORD_TOKEN_PNW=your_discord_token
+    DISCORD_CLIENT_ID_PNW=your_client_id
+    ```
+
+4. Start the application with Docker Compose:
    ```bash
    docker-compose up -d
    ```
@@ -101,14 +173,14 @@ Rage Against the Meshine is a TypeScript application that bridges Meshtastic mes
    npm install
    ```
 
-4. Set up environment variables as described above
+4. Set up config.json and secrets.json as described above
 
 5. Start the application:
    ```bash
    npx tsx index.ts
    ```
 
-## 💬 Discord Commands
+## Discord Commands
 
 The bot provides the following Discord slash commands:
 
@@ -123,7 +195,7 @@ The bot provides the following Discord slash commands:
 | `/bannode` | Ban a node from the bridge | Moderator, Admin | `nodeid`: The node ID to ban |
 | `/unbannode` | Unban a node from the bridge | Moderator, Admin | `nodeid`: The node ID to unban |
 
-## 🗃️ Project Structure
+## Project Structure
 
 ```
 rage-against-the-meshine-nextgen/
@@ -150,7 +222,7 @@ rage-against-the-meshine-nextgen/
 └── README.md             # Project documentation
 ```
 
-## 📡 Architecture
+## Architecture
 
 1. **MQTT Client**: Subscribes to Meshtastic MQTT topics and receives packet data
 2. **Packet Processing**: Decodes packets using protobuf definitions, handles different packet types
@@ -158,7 +230,7 @@ rage-against-the-meshine-nextgen/
 4. **Redis Integration**: Stores persistent data about nodes, users, and configurations
 5. **Discord Bot**: Sends processed messages to Discord channels and responds to commands
 
-## 🔄 Data Flow
+## Data Flow
 
 1. Meshtastic nodes send packets over LoRa mesh network
 2. Packets are forwarded to MQTT broker via Meshtastic gateways
@@ -167,15 +239,15 @@ rage-against-the-meshine-nextgen/
 5. Messages are sent to appropriate Discord channels
 6. Users can interact with the system via Discord commands
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🔗 Related Projects
+## Related Projects
 
 - [ratm-meshtastic-discord-bot](https://github.com/baymesh/ratm-meshtastic-discord-bot) - My original discord bot, just simple webhooks
 - [Meshtastic](https://meshtastic.org/) - Open source, off-grid, long-range mesh communication platform
