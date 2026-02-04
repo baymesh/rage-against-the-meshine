@@ -269,6 +269,30 @@ class MeshRedis {
     return null;
   }
 
+  /**
+   * Return all hex-node-IDs linked to the given Discord user.
+   */
+  async getNodesByDiscordId(discordId: string): Promise<string[]> {
+    const nodeIds: string[] = [];
+    try {
+      // iterate over all baymesh:nodelink:* keys without blocking Redis
+      for await (const key of this.redisClient.scanIterator({
+        MATCH: "baymesh:nodelink:*",
+        COUNT: 100,
+      })) {
+        const linked = await this.redisClient.get(key);
+        if (linked === discordId) {
+          // key === "baymesh:nodelink:<hexNodeId>"
+          const [, , hexNodeId] = key.split(":");
+          nodeIds.push(hexNodeId);
+        }
+      }
+    } catch (err) {
+      logger.error("getNodesByDiscordId:", err);
+    }
+    return nodeIds;
+  }
+
   async addBannedNode(hexNodeId: string) {
     try {
       if (!hexNodeId || hexNodeId.length != "dd0b9347".length) {

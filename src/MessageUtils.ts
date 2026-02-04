@@ -3,7 +3,17 @@ import { createDiscordMessage } from "./DiscordMessageUtils";
 import meshRedis from "./MeshRedis";
 import logger from "./Logger";
 
-const processTextMessage = async (packetGroup, client, guild, discordMessageIdCache, habChannel, msChannel, lfChannel) => {
+const processTextMessage = async (
+  packetGroup,
+  client,
+  guild,
+  discordMessageIdCache,
+  habChannel,
+  msChannel,
+  lfChannel,
+  mfChannel,
+  mfTestChannel,
+) => {
   const packet = packetGroup.serviceEnvelopes[0].packet;
   let text = packet.decoded.payload.toString();
   const to = nodeId2hex(packet.to);
@@ -39,19 +49,40 @@ const processTextMessage = async (packetGroup, client, guild, discordMessageIdCa
 
   const balloonNode = await meshRedis.isBalloonNode(nodeId);
 
-  const content = await createDiscordMessage(packetGroup, text, balloonNode, client, guild);
+  const content = await createDiscordMessage(
+    packetGroup,
+    text,
+    balloonNode,
+    client,
+    guild,
+  );
 
-  const getDiscordChannel = async (balloonNode, channelId) => {
+  const getDiscordChannel = async (balloonNode, channelId, topic) => {
+    // if (topic.startsWith("msh/ US/ham")) {
+    //   return hamventionChannel;
+    // }
     if (balloonNode) {
       return habChannel;
     }
     if (channelId === "MediumSlow") {
       return msChannel;
+    } else if (channelId === "MediumFast") {
+      return mfChannel;
     } else if (channelId === "LongFast") {
       return lfChannel;
     } else if (channelId === "HAB") {
       return habChannel;
+    } else if (channelId.trim() === "Test") {
+      return mfTestChannel;
     } else {
+      logger.warn(
+        "Unknown channelId: '" +
+          channelId +
+          "', packetId: " +
+          packet.id.toString() +
+          " , message: " +
+          text,
+      );
       return null;
     }
   };
@@ -59,6 +90,7 @@ const processTextMessage = async (packetGroup, client, guild, discordMessageIdCa
   let discordChannel = await getDiscordChannel(
     balloonNode,
     packetGroup.serviceEnvelopes[0].channelId,
+    packetGroup.serviceEnvelopes[0].topic,
   );
 
   if (discordChannel === null) {

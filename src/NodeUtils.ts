@@ -1,3 +1,5 @@
+import { MESHVIEW_BASE_URL } from "./config";
+
 const nodeId2hex = (nodeId: string | number) => {
   return typeof nodeId === "number"
     ? nodeId.toString(16).padStart(8, "0")
@@ -32,7 +34,7 @@ const validateNodeId = (nodeId: string): string | null => {
 const fetchNodeId = (interaction: any): string | null => {
   let nodeId = interaction.options
     .getString("nodeid")
-    .replace("https://meshview.bayme.sh/packet_list/", "")
+    .replace(`${MESHVIEW_BASE_URL}/packet_list/`, "")
     .replace("!", "")
     .trim();
 

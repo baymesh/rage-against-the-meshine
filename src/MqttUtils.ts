@@ -5,7 +5,14 @@ import meshRedis from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
 import logger from "./Logger";
 
-const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES, MQTT_BROKER_URL) => {
+const handleMqttMessage = async (
+  topic,
+  message,
+  MQTT_TOPICS,
+  meshPacketCache,
+  NODE_INFO_UPDATES,
+  MQTT_BROKER_URL,
+) => {
   try {
     if (topic.includes("msh")) {
       if (!topic.includes("/json")) {
@@ -17,9 +24,8 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
           envelope = ServiceEnvelope.decode(message);
         } catch (envDecodeErr) {
           if (
-            String(envDecodeErr).indexOf(
-              "invalid wire type 7 at offset 1",
-            ) === -1
+            String(envDecodeErr).indexOf("invalid wire type 7 at offset 1") ===
+            -1
           ) {
             logger.error(
               `MessageId: Error decoding service envelope: ${envDecodeErr}`,
@@ -61,7 +67,7 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
             meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
           } else if (portnum === 4) {
             if (!NODE_INFO_UPDATES) {
-              logger.info("Node info updates disabled");
+              // logger.debug("Node info updates disabled");
               return;
             }
             const user = User.decode(envelope.packet.decoded.payload);
