@@ -34,4 +34,15 @@ describe("Logger", () => {
     const firstCall = (console.log as jest.Mock).mock.calls[0][0] as string;
     expect(firstCall.startsWith("[prod] [INFO] hello")).toBe(true);
   });
+
+  it("adds tag when using withTag", () => {
+    logger.init("test");
+    logger.setLogLevel("INFO");
+
+    const tagged = logger.withTag("mesh:pnw");
+    tagged.info("hello");
+
+    const firstCall = (console.log as jest.Mock).mock.calls[0][0] as string;
+    expect(firstCall.includes("[mesh:pnw]")).toBe(true);
+  });
 });

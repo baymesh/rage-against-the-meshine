@@ -31,7 +31,7 @@ export const startMeshRuntime = async (
   globalConfig: MultiMeshConfig,
 ) => {
   const meshId = meshConfig.id;
-  const logPrefix = (message: string) => `[mesh:${meshId}] ${message}`;
+  const meshLogger = logger.withTag(`mesh:${meshId}`);
   const meshViewBaseUrl =
     meshConfig.meshViewBaseUrl ||
     globalConfig.meshViewBaseUrl ||
@@ -56,7 +56,7 @@ export const startMeshRuntime = async (
   });
 
   try {
-    logger.info(logPrefix("Refreshing application (/) commands."));
+    meshLogger.info("Refreshing application (/) commands.");
     await rest.put(
       Routes.applicationGuildCommands(
         meshConfig.discord.clientId,
@@ -64,19 +64,19 @@ export const startMeshRuntime = async (
       ),
       { body: Commands },
     );
-    logger.info(logPrefix("Successfully reloaded application (/) commands."));
+    meshLogger.info("Successfully reloaded application (/) commands.");
   } catch (error) {
-    logger.error(logPrefix(`Error registering commands: ${String(error)}`));
+    meshLogger.error(`Error registering commands: ${String(error)}`);
   }
 
   client.once("ready", () => {
-    logger.info(logPrefix(`Logged in as ${client.user.tag}!`));
+    meshLogger.info(`Logged in as ${client.user.tag}!`);
 
     const guild = client.guilds.cache.find(
       (g: any) => g.id === meshConfig.discord.guildId,
     );
     if (!guild) {
-      logger.error(logPrefix("No guild available for the bot"));
+      meshLogger.error("No guild available for the bot");
       return;
     }
 
@@ -96,7 +96,7 @@ export const startMeshRuntime = async (
 
     client.on("interactionCreate", async (interaction: any) => {
       if (interaction.guildId !== meshConfig.discord.guildId) {
-        logger.warn(logPrefix("Received interaction from non-guild"));
+        meshLogger.warn("Received interaction from non-guild");
         return;
       }
 
@@ -106,7 +106,7 @@ export const startMeshRuntime = async (
         let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
         if (!nodeId) {
-          logger.warn(logPrefix("Received /linknode command with no nodeid"));
+          meshLogger.warn("Received /linknode command with no nodeid");
           await interaction.reply({
             content: "Please provide a nodeid",
             ephemeral: true,
@@ -119,7 +119,7 @@ export const startMeshRuntime = async (
           size: 1024,
         });
 
-        logger.info(logPrefix(`node: ${nodeId}, profile_image_url: ${profileImageUrl}`));
+        meshLogger.info(`node: ${nodeId}, profile_image_url: ${profileImageUrl}`);
 
         const result = await meshRedis.linkNode(nodeId, interaction.user.id);
 
@@ -131,7 +131,7 @@ export const startMeshRuntime = async (
         let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
         if (!nodeId) {
-          logger.warn(logPrefix("Received /unlinknode command with no nodeid"));
+          meshLogger.warn("Received /unlinknode command with no nodeid");
           await interaction.reply({
             content: "Please provide a nodeid",
             ephemeral: true,
@@ -150,7 +150,7 @@ export const startMeshRuntime = async (
           let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
           if (!nodeId) {
-            logger.warn(logPrefix("Received /addtracker command with no nodeid"));
+            meshLogger.warn("Received /addtracker command with no nodeid");
             await interaction.reply({
               content: "Please provide a nodeid",
               ephemeral: true,
@@ -176,7 +176,7 @@ export const startMeshRuntime = async (
           let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
           if (!nodeId) {
-            logger.warn(logPrefix("Received /removetracker command with no nodeid"));
+            meshLogger.warn("Received /removetracker command with no nodeid");
             await interaction.reply({
               content: "Please provide a nodeid",
               ephemeral: true,
@@ -202,7 +202,7 @@ export const startMeshRuntime = async (
           let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
           if (!nodeId) {
-            logger.warn(logPrefix("Received /addballoon command with no nodeid"));
+            meshLogger.warn("Received /addballoon command with no nodeid");
             await interaction.reply({
               content: "Please provide a nodeid",
               ephemeral: true,
@@ -228,7 +228,7 @@ export const startMeshRuntime = async (
           let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
           if (!nodeId) {
-            logger.warn(logPrefix("Received /removeballoon command with no nodeid"));
+            meshLogger.warn("Received /removeballoon command with no nodeid");
             await interaction.reply({
               content: "Please provide a nodeid",
               ephemeral: true,
@@ -249,7 +249,7 @@ export const startMeshRuntime = async (
           let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
           if (!nodeId) {
-            logger.warn(logPrefix("Received /bannode command with no nodeid"));
+            meshLogger.warn("Received /bannode command with no nodeid");
             await interaction.reply({
               content: "Please provide a nodeid",
               ephemeral: true,
@@ -289,7 +289,7 @@ export const startMeshRuntime = async (
           let nodeId = fetchNodeId(interaction, meshViewBaseUrl);
 
           if (!nodeId) {
-            logger.warn(logPrefix("Received /unbannode command with no nodeid"));
+            meshLogger.warn("Received /unbannode command with no nodeid");
             await interaction.reply({
               content: "Please provide a nodeid",
               ephemeral: true,
@@ -329,17 +329,17 @@ export const startMeshRuntime = async (
     }, 5000);
 
     mqttClient.on("error", (err: any) => {
-      logger.error(logPrefix(`MQTT Client Error: ${String(err)}`));
+      meshLogger.error(`MQTT Client Error: ${String(err)}`);
     });
 
     mqttClient.on("connect", () => {
-      logger.info(logPrefix("Connected to MQTT broker"));
+      meshLogger.info("Connected to MQTT broker");
       meshConfig.mqtt.topics.forEach((topic) => {
         mqttClient.subscribe(topic, (err: any) => {
           if (err) {
-            logger.error(logPrefix(`Error subscribing to MQTT topic ${topic}: ${err}`));
+            meshLogger.error(`Error subscribing to MQTT topic ${topic}: ${err}`);
           } else {
-            logger.info(logPrefix(`Subscribed to MQTT topic ${topic}`));
+            meshLogger.info(`Subscribed to MQTT topic ${topic}`);
           }
         });
       });
