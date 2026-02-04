@@ -120,37 +120,10 @@ Notes:
    ```
 
 2. Create config.json and secrets.json:
-   ```
-    # config.json
-    {
-       "environment": "production",
-       "nodeInfoUpdates": true,
-       "meshes": [
-          {
-             "id": "pnw",
-             "meshViewBaseUrl": "https://meshview.bayme.sh",
-             "mqtt": { "brokerUrl": "mqtt://your-broker-url:1883", "topics": ["msh/US/#"] },
-             "discord": { "clientId": "${DISCORD_CLIENT_ID_PNW}", "guildId": "your_guild_id" },
-             "routing": { "channelRegex": [ { "pattern": "LongFast", "discordChannelId": "your_lf_channel_id" } ] }
-          }
-       ]
-    }
+   
+   see above
 
-    # secrets.json
-    {
-       "meshes": [
-          { "id": "pnw", "discordToken": "${DISCORD_TOKEN_PNW}" }
-       ]
-    }
-   ```
-
-3. Create a .env file only for secret placeholders:
-    ```
-    DISCORD_TOKEN_PNW=your_discord_token
-    DISCORD_CLIENT_ID_PNW=your_client_id
-    ```
-
-4. Start the application with Docker Compose:
+3. Start the application with Docker Compose:
    ```bash
    docker-compose up -d
    ```
