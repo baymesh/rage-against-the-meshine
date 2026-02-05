@@ -48,8 +48,15 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     return;
   }
 
-  logger.debug("createDiscordMessage: " + text);
-  logger.debug("reply_id: " + packet.decoded.replyId?.toString());
+  const gatewayCount = packetGroup.serviceEnvelopes.filter(
+    (value: any, index: number, self: any[]) =>
+      self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
+  ).length;
+
+  const replyId = packet.decoded.replyId ?? 0;
+  logger.debug(
+    `createDiscordMessage:( text: ${text} | gatewayCount: ${gatewayCount}${replyId > 0 ? ` | reply_id: ${replyId}` : ""} )`,
+  );
 
   const nodeId = nodeId2hex(packet.from);
 
