@@ -56,7 +56,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   const existsInDiscordCache = discordMessageIdCache.exists(packet.id.toString());
 
   const replyId = packet.decoded.replyId ?? 0;
-  logger.debug(
+  logger.info(
     `${ existsInDiscordCache ? 'update' : 'create'}DiscordMessage:( text: ${text} | gatewayCount: ${gatewayCount}${replyId > 0 ? ` | reply_id: ${replyId}` : ""} )`,
   );
 

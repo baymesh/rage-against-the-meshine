@@ -94,7 +94,7 @@ export class MeshRedis {
         shortName || longNameSafe
           ? ` (short: ${shortName || "-"}, long: ${longNameSafe || "-"})`
           : "";
-      logger.info(`updated node info for: ${node}${packetSuffix}${nameSuffix}`);
+      logger.debug(`updated node info for: ${node}${packetSuffix}${nameSuffix}`);
     } catch (err) {
       logger.error(err.message);
       // Sentry.captureException(err);
