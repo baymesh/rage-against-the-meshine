@@ -217,6 +217,11 @@ export const createDiscordMessage = async (
         let fieldIndex = 0;
 
         lines.forEach((line) => {
+          if (line.length > 1024) {
+            logger.error(
+              `Gateway field line exceeds 1024 chars (len=${line.length}): ${line}`,
+            );
+          }
           if (
             currentChunk.length +
               line.length +
@@ -247,6 +252,12 @@ export const createDiscordMessage = async (
         }
       });
 
+    if (msgText.length > 4096) {
+      logger.error(
+        `Embed description exceeds 4096 chars (len=${msgText.length}): ${msgText}`,
+      );
+    }
+
     const content: any = {
       username: "Mesh Bot",
       avatar_url:
@@ -263,7 +274,7 @@ export const createDiscordMessage = async (
             icon_url: avatarUrl,
           },
           title: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].shortName : "UNK"}`,
-          description: msgText,
+          description: msgText.length > 4096 ? msgText.slice(0, 4096) : msgText,
           fields: [...infoFields, ...gatewayFields2].slice(0, 25),
         },
       ],
