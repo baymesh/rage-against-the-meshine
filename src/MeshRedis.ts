@@ -64,13 +64,13 @@ export class MeshRedis {
         .then(() => {})
         .catch((err) => {
           this.redisClient.type(this.key(`nodeinfo:${node}`)).then((result) => {
-            logger.info(result);
+            logger.info(`nodeinfo key type for ${node}: ${result}`);
             if (result === "string") {
               this.redisClient.del(this.key(`nodeinfo:${node}`)).then(() => {
                 this.redisClient.json
                   .set(this.key(`nodeinfo:${node}`), "$", nodeInfoGenericObj)
                   .then(() => {
-                    logger.info("deleted and re-added node info for: " + node);
+                    logger.info(`deleted and re-added node info for: ${node}`);
                   })
                   .catch((innerErr) => {
                     logger.error(innerErr);

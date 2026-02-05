@@ -94,17 +94,17 @@ export const createDiscordMessage = async (
         });
       }
 
-      logger.info(JSON.stringify(position));
+      logger.info(`Position: ${JSON.stringify(position)}`);
 
       try {
         msgText = decodedPositionToString(position);
       } catch (e) {
-        logger.error(String(e));
+        logger.error(`Error decoding position: ${String(e)}`);
       }
       mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${(position.latitudeI ?? 0) / 10000000}&lon=${(position.longitudeI ?? 0) / 10000000}&width=400&height=400&zoom=12`;
     }
 
-    logger.info(mapUrl);
+    logger.info(`Map URL: ${mapUrl}`);
 
     if (ownerField) {
       infoFields.push({
