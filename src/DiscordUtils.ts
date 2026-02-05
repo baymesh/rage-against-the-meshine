@@ -16,6 +16,6 @@ export const fetchDiscordChannel = (guild: Guild, channelId: string) => {
     console.error(`Channel Id "${channelId}" not found`);
     return null;
   }
-  console.info(`Channel ${channel.name} found`);
+  //console.info(`Channel ${channel.name} found`);
   return channel;
 };
