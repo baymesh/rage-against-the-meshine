@@ -49,6 +49,7 @@ export class MeshRedis {
     longName: string,
     nodeInfo: any,
     hopStart: number,
+    packetId?: number,
   ) {
     try {
       this.redisClient.set(this.key(`node:${node}`), longName);
@@ -85,7 +86,9 @@ export class MeshRedis {
               logger.error(fallbackErr);
             });
         });
-      logger.info(`updated node info for: ${node}`);
+      const packetSuffix =
+        typeof packetId === "number" ? ` (packetId: ${packetId})` : "";
+      logger.info(`updated node info for: ${node}${packetSuffix}`);
     } catch (err) {
       logger.error(err.message);
       // Sentry.captureException(err);
