@@ -88,7 +88,13 @@ export class MeshRedis {
         });
       const packetSuffix =
         typeof packetId === "number" ? ` (packetId: ${packetId})` : "";
-      logger.info(`updated node info for: ${node}${packetSuffix}`);
+      const shortName = nodeInfoGenericObj?.shortName ?? "";
+      const longNameSafe = nodeInfoGenericObj?.longName ?? longName ?? "";
+      const nameSuffix =
+        shortName || longNameSafe
+          ? ` (short: ${shortName || "-"}, long: ${longNameSafe || "-"})`
+          : "";
+      logger.info(`updated node info for: ${node}${packetSuffix}${nameSuffix}`);
     } catch (err) {
       logger.error(err.message);
       // Sentry.captureException(err);
