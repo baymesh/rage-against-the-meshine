@@ -112,7 +112,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
         await discordChannel.messages.fetch(discordMessageId);
       await originalMessage.edit(content);
     } catch (err) {
-      logger.error("Discord update failed: " + String(err));
+      logger.error(`Discord update failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`);
     }
   } else {
     // send new message
@@ -136,7 +136,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
       // store message id in cache
       discordMessageIdCache.set(packet.id.toString(), discordMessage.id);
     } catch (err) {
-      logger.error("Discord send failed: " + String(err));
+      logger.error(`Discord send failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`);
       const failedText =
         content?.embeds?.[0]?.description ?? text;
       logger.error(
