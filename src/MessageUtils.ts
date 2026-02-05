@@ -98,29 +98,37 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     // update original message
     logger.info("Updating message: " + packet.id.toString());
     const discordMessageId = discordMessageIdCache.get(packet.id.toString());
-    const originalMessage =
-      await discordChannel.messages.fetch(discordMessageId);
-    originalMessage.edit(content);
+    try {
+      const originalMessage =
+        await discordChannel.messages.fetch(discordMessageId);
+      await originalMessage.edit(content);
+    } catch (err) {
+      logger.error("Discord update failed: " + String(err));
+    }
   } else {
     // send new message
     logger.info("Sending message: " + packet.id.toString());
-    let discordMessage;
-    if (
-      packet.decoded.replyId &&
-      packet.decoded.replyId > 0 &&
-      discordMessageIdCache.exists(packet.decoded.replyId.toString())
-    ) {
-      const discordMessageId = discordMessageIdCache.get(
-        packet.decoded.replyId.toString(),
-      );
-      const existingMessage =
-        await discordChannel.messages.fetch(discordMessageId);
-      discordMessage = await existingMessage.reply(content);
-    } else {
-      discordMessage = await discordChannel.send(content);
+    try {
+      let discordMessage;
+      if (
+        packet.decoded.replyId &&
+        packet.decoded.replyId > 0 &&
+        discordMessageIdCache.exists(packet.decoded.replyId.toString())
+      ) {
+        const discordMessageId = discordMessageIdCache.get(
+          packet.decoded.replyId.toString(),
+        );
+        const existingMessage =
+          await discordChannel.messages.fetch(discordMessageId);
+        discordMessage = await existingMessage.reply(content);
+      } else {
+        discordMessage = await discordChannel.send(content);
+      }
+      // store message id in cache
+      discordMessageIdCache.set(packet.id.toString(), discordMessage.id);
+    } catch (err) {
+      logger.error("Discord send failed: " + String(err));
     }
-    // store message id in cache
-    discordMessageIdCache.set(packet.id.toString(), discordMessage.id);
   }
 };
 

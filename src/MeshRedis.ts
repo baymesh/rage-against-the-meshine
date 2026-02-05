@@ -71,13 +71,19 @@ export class MeshRedis {
                   .then(() => {
                     logger.info("deleted and re-added node info for: " + node);
                   })
-                  .catch((err) => {
-                    logger.error(err);
+                  .catch((innerErr) => {
+                    logger.error(innerErr);
                   });
               });
             }
           });
           logger.error(`redis key: ${this.key(`nodeinfo:${node}`)} ${err}`);
+          // Fallback for Redis without RedisJSON
+          this.redisClient
+            .set(this.key(`nodeinfo:${node}`), JSON.stringify(nodeInfoGenericObj))
+            .catch((fallbackErr) => {
+              logger.error(fallbackErr);
+            });
         });
       logger.info(`updated node info for: ${node}`);
     } catch (err) {
@@ -90,10 +96,27 @@ export class MeshRedis {
     try {
       // const foo = nodeIds.slice(0, nodeIds.length - 1);
       nodeIds = Array.from(new Set(nodeIds));
-      const nodeInfos = await this.redisClient.json.mGet(
-        nodeIds.map((nodeId) => this.key(`nodeinfo:${nodeId2hex(nodeId)}`)),
-        "$",
-      );
+      let nodeInfos: any[] = [];
+      try {
+        nodeInfos = await this.redisClient.json.mGet(
+          nodeIds.map((nodeId) => this.key(`nodeinfo:${nodeId2hex(nodeId)}`)),
+          "$",
+        );
+      } catch (err) {
+        const values = await this.redisClient.mGet(
+          nodeIds.map((nodeId) => this.key(`nodeinfo:${nodeId2hex(nodeId)}`)),
+        );
+        nodeInfos = values.map((value) => {
+          if (!value) return null;
+          try {
+            return JSON.parse(value);
+          } catch (parseErr) {
+            logger.error(parseErr);
+            return null;
+          }
+        });
+      }
+
       if (debug) {
         logger.debug(JSON.stringify(nodeInfos));
       }

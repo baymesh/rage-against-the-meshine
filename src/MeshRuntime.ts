@@ -32,6 +32,7 @@ export const startMeshRuntime = async (
 ) => {
   const meshId = meshConfig.id;
   const meshLogger = logger.withTag(`mesh:${meshId}`);
+  let discordReady = false;
   const meshViewBaseUrl =
     meshConfig.meshViewBaseUrl ||
     globalConfig.meshViewBaseUrl ||
@@ -41,6 +42,7 @@ export const startMeshRuntime = async (
   const meshRedis = await createMeshRedis(globalConfig.redisUrl, meshId);
   const discordMessageIdCache = new FifoCache<string, string>();
   const meshPacketCache = new MeshPacketCache();
+  const nodeInfoPacketCache = new FifoCache<string, string>();
 
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
@@ -53,6 +55,40 @@ export const startMeshRuntime = async (
   const mqttClient = mqtt.connect(meshConfig.mqtt.brokerUrl, {
     username: meshConfig.mqtt.username || DEFAULT_MQTT_USERNAME,
     password: meshConfig.mqtt.password || DEFAULT_MQTT_PASSWORD,
+  });
+
+  mqttClient.on("error", (err: any) => {
+    meshLogger.error(`MQTT Client Error: ${String(err)}`);
+  });
+
+  mqttClient.on("connect", () => {
+    meshLogger.info("Connected to MQTT broker");
+    meshConfig.mqtt.topics.forEach((topic) => {
+      mqttClient.subscribe(topic, (err: any) => {
+        if (err) {
+          meshLogger.error(`Error subscribing to MQTT topic ${topic}: ${err}`);
+        } else {
+          meshLogger.info(`Subscribed to MQTT topic ${topic}`);
+        }
+      });
+    });
+  });
+
+  mqttClient.on("message", async (topic: string, message: any) => {
+    if (!discordReady) {
+      meshLogger.warn("Discord is not ready; dropping MQTT message.");
+      return;
+    }
+    await handleMqttMessage(
+      topic,
+      message,
+      meshConfig.mqtt.topics,
+      meshPacketCache,
+      nodeInfoPacketCache,
+      meshConfig.nodeInfoUpdates ?? globalConfig.nodeInfoUpdates ?? false,
+      meshConfig.mqtt.brokerUrl,
+      meshRedis,
+    );
   });
 
   try {
@@ -71,6 +107,7 @@ export const startMeshRuntime = async (
 
   client.once("ready", () => {
     meshLogger.info(`Logged in as ${client.user.tag}!`);
+    discordReady = true;
 
     const guild = client.guilds.cache.find(
       (g: any) => g.id === meshConfig.discord.guildId,
@@ -327,35 +364,6 @@ export const startMeshRuntime = async (
         });
       });
     }, 5000);
-
-    mqttClient.on("error", (err: any) => {
-      meshLogger.error(`MQTT Client Error: ${String(err)}`);
-    });
-
-    mqttClient.on("connect", () => {
-      meshLogger.info("Connected to MQTT broker");
-      meshConfig.mqtt.topics.forEach((topic) => {
-        mqttClient.subscribe(topic, (err: any) => {
-          if (err) {
-            meshLogger.error(`Error subscribing to MQTT topic ${topic}: ${err}`);
-          } else {
-            meshLogger.info(`Subscribed to MQTT topic ${topic}`);
-          }
-        });
-      });
-    });
-
-    mqttClient.on("message", async (topic: string, message: any) => {
-      await handleMqttMessage(
-        topic,
-        message,
-        meshConfig.mqtt.topics,
-        meshPacketCache,
-        meshConfig.nodeInfoUpdates ?? globalConfig.nodeInfoUpdates ?? false,
-        meshConfig.mqtt.brokerUrl,
-        meshRedis,
-      );
-    });
 
   });
 

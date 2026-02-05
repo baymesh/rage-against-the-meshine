@@ -9,6 +9,11 @@ const meshPacketCacheMock = {
   add: jest.fn(),
 };
 
+const nodeInfoPacketCacheMock = {
+  exists: jest.fn(() => false),
+  set: jest.fn(),
+};
+
 const decryptMock = jest.fn(() => ({ portnum: 1 }));
 const serviceEnvelopeDecodeMock = jest.fn(() => ({
   packet: { id: 1, encrypted: Buffer.from("x"), decoded: { portnum: 1 } },
@@ -32,6 +37,8 @@ describe("handleMqttMessage", () => {
   beforeEach(() => {
     meshPacketCacheMock.add.mockClear();
     meshPacketCacheMock.exists.mockClear();
+    nodeInfoPacketCacheMock.exists.mockClear();
+    nodeInfoPacketCacheMock.set.mockClear();
     meshRedisMock.isTrackerNode.mockClear();
     meshRedisMock.isBalloonNode.mockClear();
     meshRedisMock.updateNodeDB.mockClear();
@@ -45,6 +52,7 @@ describe("handleMqttMessage", () => {
       Buffer.from("payload"),
       ["msh/US/#"],
       meshPacketCacheMock as any,
+      nodeInfoPacketCacheMock as any,
       false,
       "broker",
       meshRedisMock as any,
@@ -63,6 +71,26 @@ describe("handleMqttMessage", () => {
       Buffer.from("payload"),
       ["msh/US/"],
       meshPacketCacheMock as any,
+      nodeInfoPacketCacheMock as any,
+      false,
+      "broker",
+      meshRedisMock as any,
+    );
+
+    expect(meshPacketCacheMock.add).toHaveBeenCalled();
+  });
+
+  it("matches MQTT wildcard topics", async () => {
+    serviceEnvelopeDecodeMock.mockReturnValueOnce({
+      packet: { id: 5, encrypted: Buffer.from("x"), decoded: { portnum: 1 } },
+    });
+
+    await handleMqttMessage(
+      "msh/US/bayarea/2",
+      Buffer.from("payload"),
+      ["msh/US/#"],
+      meshPacketCacheMock as any,
+      nodeInfoPacketCacheMock as any,
       false,
       "broker",
       meshRedisMock as any,
@@ -88,6 +116,7 @@ describe("handleMqttMessage", () => {
       Buffer.from("payload"),
       ["msh/US/"],
       meshPacketCacheMock as any,
+      nodeInfoPacketCacheMock as any,
       true,
       "broker",
       meshRedisMock as any,
@@ -112,11 +141,39 @@ describe("handleMqttMessage", () => {
       Buffer.from("payload"),
       ["msh/US/"],
       meshPacketCacheMock as any,
+      nodeInfoPacketCacheMock as any,
       true,
       "broker",
       meshRedisMock as any,
     );
 
     expect(meshRedisMock.updateNodeDB).toHaveBeenCalled();
+  });
+
+  it("dedupes node info updates by packet id", async () => {
+    serviceEnvelopeDecodeMock.mockReturnValueOnce({
+      packet: {
+        id: 9,
+        encrypted: Buffer.from(""),
+        decoded: { portnum: 4, payload: Buffer.from("x") },
+        from: 1,
+        hopStart: 1,
+      },
+    });
+
+    nodeInfoPacketCacheMock.exists.mockReturnValueOnce(true);
+
+    await handleMqttMessage(
+      "msh/US/1",
+      Buffer.from("payload"),
+      ["msh/US/"],
+      meshPacketCacheMock as any,
+      nodeInfoPacketCacheMock as any,
+      true,
+      "broker",
+      meshRedisMock as any,
+    );
+
+    expect(meshRedisMock.updateNodeDB).not.toHaveBeenCalled();
   });
 });

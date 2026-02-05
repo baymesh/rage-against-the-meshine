@@ -1,15 +1,42 @@
 import { ServiceEnvelope, Position, User } from "./Protobufs";
 import MeshPacketCache from "./MeshPacketCache";
+import type FifoCache from "./FifoCache";
 import { decrypt } from "./decrypt";
 import type { MeshRedis } from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
 import logger from "./Logger";
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const matchesTopic = (topic: string, pattern: string) => {
+  if (pattern === topic) {
+    return true;
+  }
+  if (!pattern.includes("+") && !pattern.includes("#")) {
+    return topic.startsWith(pattern);
+  }
+  const regexPattern = pattern
+    .split("/")
+    .map((part) => {
+      if (part === "+") {
+        return "[^/]+";
+      }
+      if (part === "#") {
+        return ".*";
+      }
+      return escapeRegex(part);
+    })
+    .join("/");
+  const regex = new RegExp(`^${regexPattern}$`);
+  return regex.test(topic);
+};
 
 const handleMqttMessage = async (
   topic,
   message,
   mqttTopics: string[],
   meshPacketCache: MeshPacketCache,
+  nodeInfoPacketCache: FifoCache<string, string>,
   nodeInfoUpdates: boolean,
   mqttBrokerUrl: string,
   meshRedis: MeshRedis,
@@ -40,7 +67,7 @@ const handleMqttMessage = async (
 
         if (
           mqttTopics.some((t) => {
-            return topic.startsWith(t);
+            return matchesTopic(topic, t);
           }) ||
           meshPacketCache.exists(envelope.packet.id)
         ) {
@@ -71,6 +98,10 @@ const handleMqttMessage = async (
               // logger.debug("Node info updates disabled");
               return;
             }
+            if (nodeInfoPacketCache.exists(envelope.packet.id.toString())) {
+              return;
+            }
+            nodeInfoPacketCache.set(envelope.packet.id.toString(), "1");
             const user = User.decode(envelope.packet.decoded.payload);
             const from = nodeId2hex(envelope.packet.from);
             meshRedis.updateNodeDB(
