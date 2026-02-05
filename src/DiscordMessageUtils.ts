@@ -35,7 +35,7 @@ export const createDiscordMessage = async (
     }, 0);
 
     const discordUserId = await meshRedis.getDiscordUserId(nodeIdHex);
-    logger.info(`nodeIdHex: ${nodeIdHex}, discordUserId: ${discordUserId}`);
+    // logger.info(`nodeIdHex: ${nodeIdHex}, discordUserId: ${discordUserId}`);
     let ownerField;
     if (discordUserId) {
       let guildUser: any;
@@ -102,9 +102,8 @@ export const createDiscordMessage = async (
         logger.error(`Error decoding position: ${String(e)}`);
       }
       mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${(position.latitudeI ?? 0) / 10000000}&lon=${(position.longitudeI ?? 0) / 10000000}&width=400&height=400&zoom=12`;
+      logger.info(`Map URL: ${mapUrl}`);
     }
-
-    logger.info(`Map URL: ${mapUrl}`);
 
     if (ownerField) {
       infoFields.push({
