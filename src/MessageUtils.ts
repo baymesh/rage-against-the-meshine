@@ -135,6 +135,11 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
       discordMessageIdCache.set(packet.id.toString(), discordMessage.id);
     } catch (err) {
       logger.error("Discord send failed: " + String(err));
+      const failedText =
+        content?.embeds?.[0]?.description ?? text;
+      logger.error(
+        `Discord send payload (packetId: ${packet.id.toString()}): ${failedText}`,
+      );
     }
   }
 };
