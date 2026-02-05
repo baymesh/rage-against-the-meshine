@@ -53,9 +53,11 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
       self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
   ).length;
 
+  const existsInDiscordCache = discordMessageIdCache.exists(packet.id.toString());
+
   const replyId = packet.decoded.replyId ?? 0;
   logger.debug(
-    `createDiscordMessage:( text: ${text} | gatewayCount: ${gatewayCount}${replyId > 0 ? ` | reply_id: ${replyId}` : ""} )`,
+    `${ existsInDiscordCache ? 'update' : 'create'}DiscordMessage:( text: ${text} | gatewayCount: ${gatewayCount}${replyId > 0 ? ` | reply_id: ${replyId}` : ""} )`,
   );
 
   const nodeId = nodeId2hex(packet.from);
@@ -101,9 +103,9 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     return;
   }
 
-  if (discordMessageIdCache.exists(packet.id.toString())) {
+  if (existsInDiscordCache) {
     // update original message
-    logger.info("Updating message: " + packet.id.toString());
+    // logger.info("Updating message: " + packet.id.toString());
     const discordMessageId = discordMessageIdCache.get(packet.id.toString());
     try {
       const originalMessage =
@@ -114,7 +116,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     }
   } else {
     // send new message
-    logger.info("Sending message: " + packet.id.toString());
+    // logger.info("Sending message: " + packet.id.toString());
     try {
       let discordMessage;
       if (

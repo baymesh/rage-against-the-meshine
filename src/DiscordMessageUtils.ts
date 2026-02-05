@@ -67,8 +67,6 @@ export const createDiscordMessage = async (
         self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
     ).length;
 
-    logger.info(`gatewayCount: ${gatewayCount}`);
-
     const infoFields: any = [];
 
     let mapUrl = "";
