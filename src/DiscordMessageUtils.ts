@@ -15,6 +15,7 @@ export const createDiscordMessage = async (
   meshLogger: LoggerLike,
   meshId: string,
   meshRedisMap: Map<string, MeshRedis>,
+  options?: { stripLinks?: boolean },
 ) => {
   try {
     const packet = packetGroup.serviceEnvelopes[0].packet;
@@ -338,9 +339,11 @@ export const createDiscordMessage = async (
     let finalMapUrl: string | undefined = mapUrl;
 
     const sizeWithLinks = computeEmbedSize(finalGatewayFields, safeDescription);
-    if (sizeWithLinks > 6000) {
+    if (options?.stripLinks || sizeWithLinks > 6000) {
       meshLogger.error(
-        `Embed size ${sizeWithLinks} exceeds 6000; removing non-packet links.`,
+        options?.stripLinks
+          ? "Embed link stripping forced by caller."
+          : `Embed size ${sizeWithLinks} exceeds 6000; removing non-packet links.`,
       );
       finalGatewayFields = buildGatewayFields(gatewayGroupsPlain);
       finalEmbedUrl = undefined;

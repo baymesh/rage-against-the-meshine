@@ -145,6 +145,27 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
       meshLogger.error(
         `Discord update failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`,
       );
+      if (String(err).includes("MAX_EMBED_SIZE_EXCEEDED")) {
+        try {
+          const fallbackContent = await createDiscordMessage(
+            filteredPacketGroup,
+            text,
+            client,
+            guild,
+            meshRedis,
+            meshViewBaseUrl,
+            meshLogger,
+            meshId,
+            meshRedisMap,
+            { stripLinks: true },
+          );
+          await originalMessage.edit(fallbackContent);
+        } catch (fallbackErr) {
+          meshLogger.error(
+            `Discord update fallback failed( packetId: ${packet.id.toString()}, error: ${String(fallbackErr)} )`,
+          );
+        }
+      }
     }
   } else {
     // send new message
@@ -176,6 +197,28 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
       meshLogger.error(
         `Discord send payload (packetId: ${packet.id.toString()}): ${failedText}`,
       );
+      if (String(err).includes("MAX_EMBED_SIZE_EXCEEDED")) {
+        try {
+          const fallbackContent = await createDiscordMessage(
+            filteredPacketGroup,
+            text,
+            client,
+            guild,
+            meshRedis,
+            meshViewBaseUrl,
+            meshLogger,
+            meshId,
+            meshRedisMap,
+            { stripLinks: true },
+          );
+          const retryMessage = await discordChannel.send(fallbackContent);
+          discordMessageIdCache.set(packet.id.toString(), retryMessage.id);
+        } catch (fallbackErr) {
+          meshLogger.error(
+            `Discord send fallback failed( packetId: ${packet.id.toString()}, error: ${String(fallbackErr)} )`,
+          );
+        }
+      }
     }
   }
 };
