@@ -3,6 +3,7 @@ version: '3.8'
 services:
   bot:
     image: ghcr.io/baymesh/rage-against-the-meshine-nextgen:latest
+    build: .
     environment:
     - DISCORD_TOKEN=${DISCORD_TOKEN}
     - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
