@@ -53,5 +53,7 @@ class Logger {
   }
 }
 
+export type LoggerLike = Pick<Logger, "debug" | "info" | "warn" | "error">;
+
 const logger = new Logger();
 export default logger;

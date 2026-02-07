@@ -39,7 +39,11 @@ export const startMeshRuntime = async (
     process.env.MESHVIEW_BASE_URL ||
     "";
 
-  const meshRedis = await createMeshRedis(globalConfig.redisUrl, meshId);
+  const meshRedis = await createMeshRedis(
+    globalConfig.redisUrl,
+    meshId,
+    meshLogger,
+  );
   const discordMessageIdCache = new FifoCache<string, string>();
   const meshPacketCache = new MeshPacketCache();
   const nodeInfoPacketCache = new FifoCache<string, string>();
@@ -88,6 +92,7 @@ export const startMeshRuntime = async (
       meshConfig.nodeInfoUpdates ?? globalConfig.nodeInfoUpdates ?? false,
       meshConfig.mqtt.brokerUrl,
       meshRedis,
+      meshLogger,
     );
   });
 

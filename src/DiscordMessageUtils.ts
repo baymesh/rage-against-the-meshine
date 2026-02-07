@@ -1,7 +1,7 @@
 import { userMention } from "discord.js";
 import { nodeHex2id, nodeId2hex } from "./NodeUtils";
 import { Position } from "./Protobufs";
-import logger from "./Logger";
+import type { LoggerLike } from "./Logger";
 import { DecodedPosition, decodedPositionToString } from "./MeshPacketCache";
 import type { MeshRedis } from "./MeshRedis";
 
@@ -12,6 +12,7 @@ export const createDiscordMessage = async (
   guild: any,
   meshRedis: MeshRedis,
   meshViewBaseUrl: string,
+  meshLogger: LoggerLike,
 ) => {
   try {
     const packet = packetGroup.serviceEnvelopes[0].packet;
@@ -43,10 +44,10 @@ export const createDiscordMessage = async (
       try {
         guildUser = await guild.members.fetch(discordUserId);
       } catch (e) {
-        logger.error(String(e));
+        meshLogger.error(String(e));
       }
       if (!guildUser) {
-        logger.error(
+        meshLogger.error(
           `User ${discordUserId} not found in guild, using global user.`,
         );
         guildUser = user;
@@ -94,15 +95,15 @@ export const createDiscordMessage = async (
         });
       }
 
-      logger.info(`Position: ${JSON.stringify(position)}`);
+      meshLogger.info(`Position: ${JSON.stringify(position)}`);
 
       try {
         msgText = decodedPositionToString(position);
       } catch (e) {
-        logger.error(`Error decoding position: ${String(e)}`);
+        meshLogger.error(`Error decoding position: ${String(e)}`);
       }
       mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${(position.latitudeI ?? 0) / 10000000}&lon=${(position.longitudeI ?? 0) / 10000000}&width=400&height=400&zoom=12`;
-      logger.info(`Map URL: ${mapUrl}`);
+      meshLogger.info(`Map URL: ${mapUrl}`);
     }
 
     if (ownerField) {
@@ -215,7 +216,7 @@ export const createDiscordMessage = async (
 
         lines.forEach((line) => {
           if (line.length > 1024) {
-            logger.error(
+            meshLogger.error(
               `Gateway field line exceeds 1024 chars (len=${line.length}): ${line}`,
             );
           }
@@ -250,7 +251,7 @@ export const createDiscordMessage = async (
       });
 
     if (msgText.length > 4096) {
-      logger.error(
+      meshLogger.error(
         `Embed description exceeds 4096 chars (len=${msgText.length}): ${msgText}`,
       );
     }
@@ -285,6 +286,6 @@ export const createDiscordMessage = async (
 
     return content;
   } catch (err) {
-    logger.error("Error: " + String(err));
+    meshLogger.error("Error: " + String(err));
   }
 };

@@ -27,6 +27,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     meshViewBaseUrl,
     meshId,
   } = context;
+  const meshLogger = logger.withTag(`mesh:${meshId}`);
   const packet = packetGroup.serviceEnvelopes[0].packet;
   let text = packet.decoded.payload.toString();
   const to = nodeId2hex(packet.to);
@@ -42,7 +43,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   }
 
   if (process.env.ENVIRONMENT === "production" && to !== "ffffffff") {
-    logger.info(
+    meshLogger.info(
       `MessageId: ${packetGroup.id} Not to public channel: ${packetGroup.serviceEnvelopes.map((envelope: any) => envelope.topic)}`,
     );
     return;
@@ -56,7 +57,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   const existsInDiscordCache = discordMessageIdCache.exists(packet.id.toString());
 
   const replyId = packet.decoded.replyId ?? 0;
-  logger.info(
+  meshLogger.info(
     `${ existsInDiscordCache ? 'update' : 'create'}DiscordMessage:( text: ${text} | gatewayCount: ${gatewayCount}${replyId > 0 ? ` | reply_id: ${replyId}` : ""} )`,
   );
 
@@ -65,7 +66,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   // Check if the node is banned
   const isBannedNode = await meshRedis.isBannedNode(nodeId);
   if (isBannedNode) {
-    logger.info(`Node ${nodeId} is banned. Ignoring message.`);
+    meshLogger.info(`Node ${nodeId} is banned. Ignoring message.`);
     return;
   }
 
@@ -76,6 +77,7 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     guild,
     meshRedis,
     meshViewBaseUrl,
+    meshLogger,
   );
 
   const channelId = packetGroup.serviceEnvelopes[0].channelId;
@@ -88,8 +90,8 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   });
 
   if (!matchedRule) {
-    logger.warn(
-      `[mesh:${meshId}] No regex match for channelId '${channelId}', packetId: ${packet.id.toString()}`,
+    meshLogger.warn(
+      `No regex match for channelId '${channelId}', packetId: ${packet.id.toString()}`,
     );
     return;
   }
@@ -97,8 +99,8 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   const discordChannel = resolveChannelById(matchedRule.discordChannelId);
 
   if (!discordChannel) {
-    logger.warn(
-      `[mesh:${meshId}] No discord channel found for id: ${matchedRule.discordChannelId}`,
+    meshLogger.warn(
+      `No discord channel found for id: ${matchedRule.discordChannelId}`,
     );
     return;
   }
@@ -112,7 +114,9 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
         await discordChannel.messages.fetch(discordMessageId);
       await originalMessage.edit(content);
     } catch (err) {
-      logger.error(`Discord update failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`);
+      meshLogger.error(
+        `Discord update failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`,
+      );
     }
   } else {
     // send new message
@@ -136,10 +140,12 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
       // store message id in cache
       discordMessageIdCache.set(packet.id.toString(), discordMessage.id);
     } catch (err) {
-      logger.error(`Discord send failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`);
+      meshLogger.error(
+        `Discord send failed( packetId: ${packet.id.toString()}, error: ${String(err)} )`,
+      );
       const failedText =
         content?.embeds?.[0]?.description ?? text;
-      logger.error(
+      meshLogger.error(
         `Discord send payload (packetId: ${packet.id.toString()}): ${failedText}`,
       );
     }

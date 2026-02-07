@@ -4,7 +4,7 @@ import type FifoCache from "./FifoCache";
 import { decrypt } from "./decrypt";
 import type { MeshRedis } from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
-import logger from "./Logger";
+import type { LoggerLike } from "./Logger";
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -40,6 +40,7 @@ const handleMqttMessage = async (
   nodeInfoUpdates: boolean,
   mqttBrokerUrl: string,
   meshRedis: MeshRedis,
+  meshLogger: LoggerLike,
 ) => {
   try {
     if (topic.includes("msh")) {
@@ -55,7 +56,7 @@ const handleMqttMessage = async (
             String(envDecodeErr).indexOf("invalid wire type 7 at offset 1") ===
             -1
           ) {
-            logger.error(
+            meshLogger.error(
               `MessageId: Error decoding service envelope: ${envDecodeErr}`,
             );
           }
@@ -116,7 +117,7 @@ const handleMqttMessage = async (
       }
     }
   } catch (err) {
-    logger.error("Error: " + String(err));
+    meshLogger.error("Error: " + String(err));
   }
 };
 
