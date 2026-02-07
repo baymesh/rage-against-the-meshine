@@ -253,6 +253,13 @@ export const createDiscordMessage = async (
 
     const buildGatewayFields = (groups: Record<string, string[]>) => {
       const gatewayFields: any = [];
+      const clampLine = (line: string) => {
+        if (line.length <= 1024) return line;
+        meshLogger.error(
+          `Gateway field line exceeds 1024 chars (len=${line.length}), truncating.`,
+        );
+        return line.slice(0, 1021) + "...";
+      };
       Object.keys(groups)
       .sort((a, b) => {
         if (a === "Unknown Hops") return 1;
@@ -272,14 +279,10 @@ export const createDiscordMessage = async (
         let fieldIndex = 0;
 
         lines.forEach((line) => {
-          if (line.length > 1024) {
-            meshLogger.error(
-              `Gateway field line exceeds 1024 chars (len=${line.length}): ${line}`,
-            );
-          }
+          const safeLine = clampLine(line);
           if (
             currentChunk.length +
-              line.length +
+              safeLine.length +
               (currentChunk.length > 0 ? 1 : 0) >
             1024
           ) {
@@ -289,12 +292,12 @@ export const createDiscordMessage = async (
               inline: false,
             });
             fieldIndex++;
-            currentChunk = line;
+            currentChunk = safeLine;
           } else {
             currentChunk =
               currentChunk.length > 0
-                ? currentChunk + (hop === "0" ? "\n" : " | ") + line
-                : line;
+                ? currentChunk + (hop === "0" ? "\n" : " | ") + safeLine
+                : safeLine;
           }
         });
 
