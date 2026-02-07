@@ -170,6 +170,7 @@ export const createDiscordMessage = async (
     });
 
     const gatewayGroups: Record<string, string[]> = {};
+    const gatewayGroupsPlain: Record<string, string[]> = {};
 
     packetGroup.serviceEnvelopes
       .filter(
@@ -238,15 +239,21 @@ export const createDiscordMessage = async (
         const gatewayFieldText =
           `[${gatewayDisplayName} ${hopText}` +
           `](${meshViewBaseUrl}/packet_list/${nodeHex2id(envelope.gatewayId.replace("!", ""))})`;
+        const gatewayFieldTextPlain = `${gatewayDisplayName} ${hopText}`.trim();
 
         if (!gatewayGroups[hopGroup]) {
           gatewayGroups[hopGroup] = [];
         }
+        if (!gatewayGroupsPlain[hopGroup]) {
+          gatewayGroupsPlain[hopGroup] = [];
+        }
         gatewayGroups[hopGroup].push(gatewayFieldText);
+        gatewayGroupsPlain[hopGroup].push(gatewayFieldTextPlain);
       });
 
-    const gatewayFields2: any = [];
-    Object.keys(gatewayGroups)
+    const buildGatewayFields = (groups: Record<string, string[]>) => {
+      const gatewayFields: any = [];
+      Object.keys(groups)
       .sort((a, b) => {
         if (a === "Unknown Hops") return 1;
         if (b === "Unknown Hops") return -1;
@@ -260,7 +267,7 @@ export const createDiscordMessage = async (
               ? "Direct"
               : `${hop} hops`;
 
-        const lines = gatewayGroups[hop];
+        const lines = groups[hop];
         let currentChunk = "";
         let fieldIndex = 0;
 
@@ -276,7 +283,7 @@ export const createDiscordMessage = async (
               (currentChunk.length > 0 ? 1 : 0) >
             1024
           ) {
-            gatewayFields2.push({
+            gatewayFields.push({
               name: fieldIndex === 0 ? baseName : `${baseName} continued`,
               value: currentChunk,
               inline: false,
@@ -292,18 +299,50 @@ export const createDiscordMessage = async (
         });
 
         if (currentChunk.length > 0) {
-          gatewayFields2.push({
+          gatewayFields.push({
             name: fieldIndex === 0 ? baseName : `${baseName} (continued)`,
             value: currentChunk,
             inline: false,
           });
         }
       });
+      return gatewayFields;
+    };
+
+    const gatewayFields2: any = buildGatewayFields(gatewayGroups);
 
     if (msgText.length > 4096) {
       meshLogger.error(
         `Embed description exceeds 4096 chars (len=${msgText.length}): ${msgText}`,
       );
+    }
+
+    const computeEmbedSize = (fields: any[], description: string) => {
+      let size = 0;
+      size += `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`.length;
+      size += `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`.length;
+      size += description.length;
+      fields.forEach((field) => {
+        size += (field.name?.length || 0) + (field.value?.length || 0);
+      });
+      return size;
+    };
+
+    const safeDescription = msgText.length > 4096 ? msgText.slice(0, 4096) : msgText;
+    let finalGatewayFields = gatewayFields2;
+    let finalEmbedUrl: string | undefined = `${meshViewBaseUrl}/packet_list/${packet.from}`;
+    let finalAuthorUrl: string | undefined = `${meshViewBaseUrl}/packet_list/${packet.from}`;
+    let finalMapUrl: string | undefined = mapUrl;
+
+    const sizeWithLinks = computeEmbedSize(finalGatewayFields, safeDescription);
+    if (sizeWithLinks > 6000) {
+      meshLogger.error(
+        `Embed size ${sizeWithLinks} exceeds 6000; removing non-packet links.`,
+      );
+      finalGatewayFields = buildGatewayFields(gatewayGroupsPlain);
+      finalEmbedUrl = undefined;
+      finalAuthorUrl = undefined;
+      finalMapUrl = undefined;
     }
 
     const content: any = {
@@ -312,25 +351,25 @@ export const createDiscordMessage = async (
         "https://cdn.discordapp.com/app-icons/1240017058046152845/295e77bec5f9a44f7311cf8723e9c332.png",
       embeds: [
         {
-          url: `${meshViewBaseUrl}/packet_list/${packet.from}`,
+          url: finalEmbedUrl,
           color: 6810260,
           timestamp: new Date(packet.rxTime * 1000).toISOString(),
 
           author: {
             name: `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`,
-            url: `${meshViewBaseUrl}/packet_list/${packet.from}`,
+            url: finalAuthorUrl,
             icon_url: avatarUrl,
           },
           title: `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`,
-          description: msgText.length > 4096 ? msgText.slice(0, 4096) : msgText,
-          fields: [...infoFields, ...gatewayFields2].slice(0, 25),
+          description: safeDescription,
+          fields: [...infoFields, ...finalGatewayFields].slice(0, 25),
         },
       ],
     };
 
-    if (mapUrl) {
+    if (finalMapUrl) {
       content.embeds[0].image = {
-        url: mapUrl,
+        url: finalMapUrl,
       };
     }
 
