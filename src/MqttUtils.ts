@@ -1,11 +1,48 @@
-import { ServiceEnvelope, Position, User } from "../index";
-import MeshPacketCache from "./MeshPacketCache";
+import { ServiceEnvelope, Position, User } from "./Protobufs";
+import CrossMeshPacketCache from "./CrossMeshPacketCache";
+import type FifoCache from "./FifoCache";
 import { decrypt } from "./decrypt";
-import meshRedis from "./MeshRedis";
+import type { MeshRedis } from "./MeshRedis";
 import { nodeId2hex } from "./NodeUtils";
-import logger from "./Logger";
+import type { LoggerLike } from "./Logger";
 
-const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, NODE_INFO_UPDATES, MQTT_BROKER_URL) => {
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const matchesTopic = (topic: string, pattern: string) => {
+  if (pattern === topic) {
+    return true;
+  }
+  if (!pattern.includes("+") && !pattern.includes("#")) {
+    return topic.startsWith(pattern);
+  }
+  const regexPattern = pattern
+    .split("/")
+    .map((part) => {
+      if (part === "+") {
+        return "[^/]+";
+      }
+      if (part === "#") {
+        return ".*";
+      }
+      return escapeRegex(part);
+    })
+    .join("/");
+  const regex = new RegExp(`^${regexPattern}$`);
+  return regex.test(topic);
+};
+
+const handleMqttMessage = async (
+  topic,
+  message,
+  mqttTopics: string[],
+  crossMeshPacketCache: CrossMeshPacketCache,
+  nodeInfoPacketCache: FifoCache<string, string>,
+  nodeInfoUpdates: boolean,
+  mqttBrokerUrl: string,
+  meshRedis: MeshRedis,
+  meshLogger: LoggerLike,
+  meshId: string,
+) => {
   try {
     if (topic.includes("msh")) {
       if (!topic.includes("/json")) {
@@ -17,11 +54,10 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
           envelope = ServiceEnvelope.decode(message);
         } catch (envDecodeErr) {
           if (
-            String(envDecodeErr).indexOf(
-              "invalid wire type 7 at offset 1",
-            ) === -1
+            String(envDecodeErr).indexOf("invalid wire type 7 at offset 1") ===
+            -1
           ) {
-            logger.error(
+            meshLogger.error(
               `MessageId: Error decoding service envelope: ${envDecodeErr}`,
             );
           }
@@ -31,11 +67,12 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
           return;
         }
 
+        const fromHex = nodeId2hex(envelope.packet.from);
         if (
-          MQTT_TOPICS.some((t) => {
-            return topic.startsWith(t);
+          mqttTopics.some((t) => {
+            return matchesTopic(topic, t);
           }) ||
-          meshPacketCache.exists(envelope.packet.id)
+          crossMeshPacketCache.exists(envelope.packet.id, fromHex)
         ) {
           const isEncrypted = envelope.packet.encrypted?.length > 0;
           if (isEncrypted) {
@@ -46,7 +83,7 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
           }
           const portnum = envelope.packet?.decoded?.portnum;
           if (portnum === 1) {
-            meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
+            crossMeshPacketCache.add(envelope, topic, mqttBrokerUrl, meshId);
           } else if (portnum === 3) {
             const from = envelope.packet.from.toString(16);
             const isTrackerNode = await meshRedis.isTrackerNode(from);
@@ -58,12 +95,16 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
             if (!position.latitudeI && !position.longitudeI) {
               return;
             }
-            meshPacketCache.add(envelope, topic, MQTT_BROKER_URL);
+            crossMeshPacketCache.add(envelope, topic, mqttBrokerUrl, meshId);
           } else if (portnum === 4) {
-            if (!NODE_INFO_UPDATES) {
-              logger.info("Node info updates disabled");
+            if (!nodeInfoUpdates) {
+              // logger.debug("Node info updates disabled");
               return;
             }
+            if (nodeInfoPacketCache.exists(envelope.packet.id.toString())) {
+              return;
+            }
+            nodeInfoPacketCache.set(envelope.packet.id.toString(), "1");
             const user = User.decode(envelope.packet.decoded.payload);
             const from = nodeId2hex(envelope.packet.from);
             meshRedis.updateNodeDB(
@@ -71,13 +112,14 @@ const handleMqttMessage = async (topic, message, MQTT_TOPICS, meshPacketCache, N
               user.longName,
               user,
               envelope.packet.hopStart,
+              envelope.packet.id,
             );
           }
         }
       }
     }
   } catch (err) {
-    logger.error("Error: " + String(err));
+    meshLogger.error("Error: " + String(err));
   }
 };
 

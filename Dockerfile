@@ -9,7 +9,7 @@ RUN npm install
 
 COPY . .
 
-RUN git clone https://github.com/meshtastic/protobufs.git src/protobufs
+RUN if [ -d src/protobufs ] && [ "$(ls -A src/protobufs)" ]; then echo "src/protobufs already present"; else git clone https://github.com/meshtastic/protobufs.git src/protobufs; fi
 
 # Stage 2: Create the final image
 FROM node:20-slim

@@ -15,7 +15,11 @@ const validateNodeId = (nodeId: string): string | null => {
 
   if (nodeId.length !== 8) {
     try {
-      const nodeIdHex = nodeId2hex(parseInt(nodeId));
+      const parsed = parseInt(nodeId, 10);
+      if (Number.isNaN(parsed)) {
+        return null;
+      }
+      const nodeIdHex = nodeId2hex(parsed);
       if (nodeIdHex.length === 8) {
         return nodeIdHex;
       }
@@ -29,10 +33,10 @@ const validateNodeId = (nodeId: string): string | null => {
   return null;
 };
 
-const fetchNodeId = (interaction: any): string | null => {
+const fetchNodeId = (interaction: any, meshViewBaseUrl = ""): string | null => {
   let nodeId = interaction.options
     .getString("nodeid")
-    .replace("https://meshview.bayme.sh/packet_list/", "")
+    .replace(`${meshViewBaseUrl}/packet_list/`, "")
     .replace("!", "")
     .trim();
 

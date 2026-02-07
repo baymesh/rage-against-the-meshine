@@ -7,6 +7,11 @@ function loggerDateString() {
 class Logger {
   instanceId: string;
   logLevel: string;
+  tag?: string;
+
+  constructor(tag?: string) {
+    this.tag = tag;
+  }
 
   init(instanceId: string) {
     this.instanceId = instanceId;
@@ -19,8 +24,16 @@ class Logger {
   log(level: string, message: string) {
     const levels = ["DEBUG", "INFO", "WARN", "ERROR"];
     if (levels.indexOf(level) >= levels.indexOf(this.logLevel)) {
-      console.log(`${loggerDateString()}[${this.instanceId}] [${level}] ${message}`);
+      const tagPart = this.tag ? ` [${this.tag}]` : "";
+      console.log(`${loggerDateString()}[${this.instanceId}] [${level}]${tagPart} ${message}`);
     }
+  }
+
+  withTag(tag: string) {
+    const taggedLogger = new Logger(tag);
+    taggedLogger.instanceId = this.instanceId;
+    taggedLogger.logLevel = this.logLevel;
+    return taggedLogger;
   }
 
   debug(message: string) {
@@ -39,6 +52,8 @@ class Logger {
     this.log("ERROR", message);
   }
 }
+
+export type LoggerLike = Pick<Logger, "debug" | "info" | "warn" | "error">;
 
 const logger = new Logger();
 export default logger;

@@ -1,8 +1,19 @@
 import crypto from "crypto";
 import { Data } from "../index.ts";
+import logger from "./Logger.ts";
 
 const decryptionKeys = [
   "1PG7OiApB1nwvP+rz05pAQ==", // add default "AQ==" decryption key
+
+  "1PG7OiApB1nwvP+rz05pCQ==", // Ham | CQ== (0x09)
+  "1PG7OiApB1nwvP+rz05pEQ==", // MeshQuake | EQ== (0x11)
+  "1PG7OiApB1nwvP+rz05p5g==", // BayMeshNews | 5g== (0xE6)
+  "1PG7OiApB1nwvP+rz05pSA==", // SF | SA== (0x48)
+  "1PG7OiApB1nwvP+rz05pTQ==", // Test | TQ== (0x4D)
+  "1PG7OiApB1nwvP+rz05pNA==", // CRUZ | NA== (0x34)
+  "1PG7OiApB1nwvP+rz05pew==", // Boozin' | ew== (0x7B)
+  "1PG7OiApB1nwvP+rz05p1A==", // First | 1A== (0xD4)
+  "1PG7OiApB1nwvP+rz05peQ==", // Retro | eQ== (0x79)
 ];
 
 function createNonce(packetId, fromNode) {
@@ -47,6 +58,10 @@ function decrypt(packet) {
         decipher.update(packet.encrypted),
         decipher.final(),
       ]);
+
+      if (decryptionKeys.indexOf(decryptionKey) > 0) {
+        // logger.info(`decryption key: ${decryptionKey}`);
+      }
 
       // parse as data message
       return Data.decode(decryptedBuffer);

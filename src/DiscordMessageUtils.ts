@@ -1,10 +1,22 @@
-import { GuildMember, User as DiscordUser, userMention } from "discord.js";
+import { userMention } from "discord.js";
 import { nodeHex2id, nodeId2hex } from "./NodeUtils";
-import meshRedis from "./MeshRedis";
-import logger from "./Logger";
+import { Position } from "./Protobufs";
+import type { LoggerLike } from "./Logger";
 import { DecodedPosition, decodedPositionToString } from "./MeshPacketCache";
+import type { MeshRedis } from "./MeshRedis";
 
-export const createDiscordMessage = async (packetGroup, text, balloonNode, client, guild) => {
+export const createDiscordMessage = async (
+  packetGroup: any,
+  text: string,
+  client: any,
+  guild: any,
+  meshRedis: MeshRedis,
+  meshViewBaseUrl: string,
+  meshLogger: LoggerLike,
+  meshId: string,
+  meshRedisMap: Map<string, MeshRedis>,
+  options?: { stripLinks?: boolean },
+) => {
   try {
     const packet = packetGroup.serviceEnvelopes[0].packet;
     const from = nodeId2hex(packet.from);
@@ -12,33 +24,64 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
     const portNum = packet?.decoded?.portnum;
     let msgText = text;
 
-    let nodeInfos = await meshRedis.getNodeInfos(
-      packetGroup.serviceEnvelopes
-        .map((se) => se.gatewayId.replace("!", ""))
-        .concat(from),
-      false,
-    );
+    const gatewayIdsByMesh = new Map<string, Set<string>>();
+    packetGroup.serviceEnvelopes.forEach((envelope: any) => {
+      const gatewayId = envelope.gatewayId.replace("!", "");
+      const gatewayMeshId = envelope.gatewayMeshId || envelope.meshId || meshId;
+      if (!gatewayIdsByMesh.has(gatewayMeshId)) {
+        gatewayIdsByMesh.set(gatewayMeshId, new Set());
+      }
+      gatewayIdsByMesh.get(gatewayMeshId)?.add(gatewayId);
+    });
+
+    if (!gatewayIdsByMesh.has(meshId)) {
+      gatewayIdsByMesh.set(meshId, new Set());
+    }
+    gatewayIdsByMesh.get(meshId)?.add(from);
+
+    const nodeInfosByMesh = new Map<string, Record<string, any>>();
+    for (const [gatewayMeshId, gatewayIds] of gatewayIdsByMesh.entries()) {
+      const redisForMesh = meshRedisMap.get(gatewayMeshId) ?? meshRedis;
+      const infos = await redisForMesh.getNodeInfos(
+        Array.from(gatewayIds),
+        false,
+      );
+      nodeInfosByMesh.set(gatewayMeshId, infos);
+    }
+
+    const getNodeInfo = (nodeId: string, primaryMeshId: string) => {
+      const primary = nodeInfosByMesh.get(primaryMeshId);
+      if (primary && primary[nodeId]) {
+        return primary[nodeId];
+      }
+      for (const infos of nodeInfosByMesh.values()) {
+        if (infos && infos[nodeId]) {
+          return infos[nodeId];
+        }
+      }
+      return null;
+    };
 
     let avatarUrl = "https://cdn.discordapp.com/embed/avatars/0.png";
 
-    const maxHopStart = packetGroup.serviceEnvelopes.reduce((acc, se) => {
+    const maxHopStart = packetGroup.serviceEnvelopes.reduce((acc: number, se: any) => {
       const hopStart = se.packet.hopStart;
       return hopStart > acc ? hopStart : acc;
     }, 0);
 
     const discordUserId = await meshRedis.getDiscordUserId(nodeIdHex);
-    logger.info(`nodeIdHex: ${nodeIdHex}, discordUserId: ${discordUserId}`);
+    // logger.info(`nodeIdHex: ${nodeIdHex}, discordUserId: ${discordUserId}`);
     let ownerField;
     if (discordUserId) {
-      let guildUser: GuildMember | DiscordUser | undefined;
-      const user: DiscordUser = await client.users.fetch(discordUserId);
+      let guildUser: any;
+      const user: any = await client.users.fetch(discordUserId);
       try {
         guildUser = await guild.members.fetch(discordUserId);
       } catch (e) {
-        logger.error(e);
+        meshLogger.error(String(e));
       }
       if (!guildUser) {
-        logger.error(
+        meshLogger.error(
           `User ${discordUserId} not found in guild, using global user.`,
         );
         guildUser = user;
@@ -55,11 +98,14 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
     }
 
     const gatewayCount = packetGroup.serviceEnvelopes.filter(
-      (value, index, self) =>
-        self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
+      (value: any, index: number, self: any[]) =>
+        self.findIndex(
+          (t) =>
+            t.gatewayId === value.gatewayId &&
+            (t.gatewayMeshId ?? t.meshId ?? meshId) ===
+              (value.gatewayMeshId ?? value.meshId ?? meshId),
+        ) === index,
     ).length;
-
-    logger.info(`gatewayCount: ${gatewayCount}`);
 
     const infoFields: any = [];
 
@@ -72,12 +118,12 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
       infoFields.push({
         name: "Latitude",
-        value: `${position.latitudeI / 10000000}`,
+        value: `${(position.latitudeI ?? 0) / 10000000}`,
         inline: true,
       });
       infoFields.push({
         name: "Longitude",
-        value: `${position.longitudeI / 10000000}`,
+        value: `${(position.longitudeI ?? 0) / 10000000}`,
         inline: true,
       });
       if (position.altitude) {
@@ -88,17 +134,16 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
         });
       }
 
-      logger.info(position);
+      meshLogger.info(`Position: ${JSON.stringify(position)}`);
 
       try {
         msgText = decodedPositionToString(position);
       } catch (e) {
-        logger.error(e);
+        meshLogger.error(`Error decoding position: ${String(e)}`);
       }
-      mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${position.latitudeI / 10000000}&lon=${position.longitudeI / 10000000}&width=400&height=400&zoom=12`;
+      mapUrl = `https://api.smerty.org/api/v1/maps/static?lat=${(position.latitudeI ?? 0) / 10000000}&lon=${(position.longitudeI ?? 0) / 10000000}&width=400&height=400&zoom=12`;
+      meshLogger.info(`Map URL: ${mapUrl}`);
     }
-
-    logger.info(mapUrl);
 
     if (ownerField) {
       infoFields.push({
@@ -110,17 +155,9 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
     infoFields.push({
       name: "Packet",
-      value: `[${packetGroup.id.toString(16)}](https://meshview.bayme.sh/packet/${packetGroup.id})`,
+      value: `[${packetGroup.id.toString(16)}](${meshViewBaseUrl}/packet/${packetGroup.id})`,
       inline: true,
     });
-
-    if (balloonNode) {
-      infoFields.push({
-        name: "Channel",
-        value: `${packetGroup.serviceEnvelopes[0].channelId}`,
-        inline: true,
-      });
-    }
 
     infoFields.push({
       name: "Hop Limit",
@@ -133,19 +170,32 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
       inline: true,
     });
 
-    const gatewayGroups = {};
+    const gatewayGroups: Record<string, string[]> = {};
+    const gatewayGroupsPlain: Record<string, string[]> = {};
 
     packetGroup.serviceEnvelopes
       .filter(
-        (value, index, self) =>
-          self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
+        (value: any, index: number, self: any[]) =>
+          self.findIndex(
+            (t) =>
+              t.gatewayId === value.gatewayId &&
+              (t.gatewayMeshId ?? t.meshId ?? meshId) ===
+                (value.gatewayMeshId ?? value.meshId ?? meshId),
+          ) === index,
       )
-      .forEach((envelope) => {
+        .forEach((envelope: any) => {
         const gatewayDelay =
           envelope.mqttTime.getTime() - packetGroup.time.getTime();
+        const gatewayMeshId = envelope.gatewayMeshId || envelope.meshId || meshId;
         let gatewayDisplayName = envelope.gatewayId.replace("!", "");
-        if (nodeInfos[gatewayDisplayName]) {
-          gatewayDisplayName = nodeInfos[gatewayDisplayName].shortName;
+        const gatewayInfos = nodeInfosByMesh.get(gatewayMeshId);
+        if (gatewayInfos && gatewayInfos[gatewayDisplayName]) {
+          gatewayDisplayName = gatewayInfos[gatewayDisplayName].shortName;
+        } else {
+          const fallbackInfo = getNodeInfo(gatewayDisplayName, meshId);
+          if (fallbackInfo?.shortName) {
+            gatewayDisplayName = fallbackInfo.shortName;
+          }
         }
 
         let hopText;
@@ -189,20 +239,33 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
 
         const gatewayFieldText =
           `[${gatewayDisplayName} ${hopText}` +
-          `](https://meshview.bayme.sh/packet_list/${nodeHex2id(envelope.gatewayId.replace("!", ""))})`;
+          `](${meshViewBaseUrl}/packet_list/${nodeHex2id(envelope.gatewayId.replace("!", ""))})`;
+        const gatewayFieldTextPlain = `${gatewayDisplayName} ${hopText}`.trim();
 
         if (!gatewayGroups[hopGroup]) {
           gatewayGroups[hopGroup] = [];
         }
+        if (!gatewayGroupsPlain[hopGroup]) {
+          gatewayGroupsPlain[hopGroup] = [];
+        }
         gatewayGroups[hopGroup].push(gatewayFieldText);
+        gatewayGroupsPlain[hopGroup].push(gatewayFieldTextPlain);
       });
 
-    const gatewayFields2: any = [];
-    Object.keys(gatewayGroups)
+    const buildGatewayFields = (groups: Record<string, string[]>) => {
+      const gatewayFields: any = [];
+      const clampLine = (line: string) => {
+        if (line.length <= 1024) return line;
+        meshLogger.error(
+          `Gateway field line exceeds 1024 chars (len=${line.length}), truncating.`,
+        );
+        return line.slice(0, 1021) + "...";
+      };
+      Object.keys(groups)
       .sort((a, b) => {
         if (a === "Unknown Hops") return 1;
         if (b === "Unknown Hops") return -1;
-        return a - b;
+        return Number(a) - Number(b);
       })
       .forEach((hop) => {
         const baseName =
@@ -212,71 +275,112 @@ export const createDiscordMessage = async (packetGroup, text, balloonNode, clien
               ? "Direct"
               : `${hop} hops`;
 
-        const lines = gatewayGroups[hop];
+        const lines = groups[hop];
         let currentChunk = "";
         let fieldIndex = 0;
 
         lines.forEach((line) => {
+          const safeLine = clampLine(line);
           if (
             currentChunk.length +
-              line.length +
+              safeLine.length +
               (currentChunk.length > 0 ? 1 : 0) >
             1024
           ) {
-            gatewayFields2.push({
+            gatewayFields.push({
               name: fieldIndex === 0 ? baseName : `${baseName} continued`,
               value: currentChunk,
               inline: false,
             });
             fieldIndex++;
-            currentChunk = line;
+            currentChunk = safeLine;
           } else {
             currentChunk =
               currentChunk.length > 0
-                ? currentChunk + (hop === "0" ? "\n" : " | ") + line
-                : line;
+                ? currentChunk + (hop === "0" ? "\n" : " | ") + safeLine
+                : safeLine;
           }
         });
 
         if (currentChunk.length > 0) {
-          gatewayFields2.push({
+          gatewayFields.push({
             name: fieldIndex === 0 ? baseName : `${baseName} (continued)`,
             value: currentChunk,
             inline: false,
           });
         }
       });
+      return gatewayFields;
+    };
 
-    const content = {
+    const gatewayFields2: any = buildGatewayFields(gatewayGroups);
+
+    if (msgText.length > 4096) {
+      meshLogger.error(
+        `Embed description exceeds 4096 chars (len=${msgText.length}): ${msgText}`,
+      );
+    }
+
+    const computeEmbedSize = (fields: any[], description: string) => {
+      let size = 0;
+      size += `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`.length;
+      size += `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`.length;
+      size += description.length;
+      fields.forEach((field) => {
+        size += (field.name?.length || 0) + (field.value?.length || 0);
+      });
+      return size;
+    };
+
+    const safeDescription = msgText.length > 4096 ? msgText.slice(0, 4096) : msgText;
+    let finalGatewayFields = gatewayFields2;
+    let finalEmbedUrl: string | undefined = `${meshViewBaseUrl}/packet_list/${packet.from}`;
+    let finalAuthorUrl: string | undefined = `${meshViewBaseUrl}/packet_list/${packet.from}`;
+    let finalMapUrl: string | undefined = mapUrl;
+
+    const sizeWithLinks = computeEmbedSize(finalGatewayFields, safeDescription);
+    if (options?.stripLinks || sizeWithLinks > 6000) {
+      meshLogger.error(
+        options?.stripLinks
+          ? "Embed link stripping forced by caller."
+          : `Embed size ${sizeWithLinks} exceeds 6000; removing non-packet links.`,
+      );
+      finalGatewayFields = buildGatewayFields(gatewayGroupsPlain);
+      finalEmbedUrl = undefined;
+      finalAuthorUrl = undefined;
+      finalMapUrl = undefined;
+    }
+
+    const content: any = {
       username: "Mesh Bot",
       avatar_url:
         "https://cdn.discordapp.com/app-icons/1240017058046152845/295e77bec5f9a44f7311cf8723e9c332.png",
       embeds: [
         {
-          url: `https://meshview.bayme.sh/packet_list/${packet.from}`,
+          url: finalEmbedUrl,
           color: 6810260,
           timestamp: new Date(packet.rxTime * 1000).toISOString(),
 
           author: {
-            name: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].longName : "Unknown"}`,
-            url: `https://meshview.bayme.sh/packet_list/${packet.from}`,
+            name: `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`,
+            url: finalAuthorUrl,
             icon_url: avatarUrl,
           },
-          title: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].shortName : "UNK"}`,
-          description: msgText,
-          fields: [...infoFields, ...gatewayFields2].slice(0, 25),
+          title: `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`,
+          description: safeDescription,
+          fields: [...infoFields, ...finalGatewayFields].slice(0, 25),
         },
       ],
     };
 
-    if (mapUrl) {
+    if (finalMapUrl) {
       content.embeds[0].image = {
-        url: mapUrl,
+        url: finalMapUrl,
       };
     }
 
     return content;
   } catch (err) {
-    logger.error("Error: " + String(err));
+    meshLogger.error("Error: " + String(err));
   }
 };

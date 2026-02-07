@@ -1,15 +1,45 @@
 import { createClient, RedisClientType } from "redis";
 import { nodeId2hex } from "./NodeUtils";
-import logger from "./Logger";
+import type { LoggerLike } from "./Logger";
 
-class MeshRedis {
+let sharedClient: RedisClientType | null = null;
+let sharedClientPromise: Promise<RedisClientType> | null = null;
+
+const getSharedClient = async (
+  redisUrl: string,
+): Promise<RedisClientType> => {
+  if (sharedClient && sharedClient.isOpen) {
+    return sharedClient;
+  }
+  if (sharedClientPromise) {
+    return sharedClientPromise;
+  }
+  sharedClientPromise = (async () => {
+    const client = createClient({ url: redisUrl });
+    await client.connect();
+    sharedClient = client;
+    return client;
+  })();
+  return sharedClientPromise;
+};
+
+export class MeshRedis {
   redisClient: RedisClientType;
+  keyPrefix: string;
+  logger: LoggerLike;
 
-  async init(redisUrl: string) {
-    this.redisClient = createClient({
-      url: redisUrl,
-    });
-    await this.redisClient.connect();
+  constructor(
+    redisClient: RedisClientType,
+    keyPrefix: string,
+    logger: LoggerLike,
+  ) {
+    this.redisClient = redisClient;
+    this.keyPrefix = keyPrefix;
+    this.logger = logger;
+  }
+
+  private key(key: string) {
+    return `${this.keyPrefix}:${key}`;
   }
 
   async disconnect() {
@@ -25,9 +55,10 @@ class MeshRedis {
     longName: string,
     nodeInfo: any,
     hopStart: number,
+    packetId?: number,
   ) {
     try {
-      this.redisClient.set(`baymesh:node:${node}`, longName);
+      this.redisClient.set(this.key(`node:${node}`), longName);
       const nodeInfoGenericObj = JSON.parse(JSON.stringify(nodeInfo));
       // remove leading "!" from id
       nodeInfoGenericObj.id = nodeInfoGenericObj.id.replace("!", "");
@@ -35,29 +66,49 @@ class MeshRedis {
       nodeInfoGenericObj.hopStart = hopStart;
       nodeInfoGenericObj.updatedAt = new Date().getTime();
       this.redisClient.json
-        .set(`baymesh:nodeinfo:${node}`, "$", nodeInfoGenericObj)
+        .set(this.key(`nodeinfo:${node}`), "$", nodeInfoGenericObj)
         .then(() => {})
         .catch((err) => {
-          this.redisClient.type(`baymesh:nodeinfo:${node}`).then((result) => {
-            logger.info(result);
+          this.redisClient.type(this.key(`nodeinfo:${node}`)).then((result) => {
+            this.logger.info(`nodeinfo key type for ${node}: ${result}`);
             if (result === "string") {
-              this.redisClient.del(`baymesh:nodeinfo:${node}`).then(() => {
+              this.redisClient.del(this.key(`nodeinfo:${node}`)).then(() => {
                 this.redisClient.json
-                  .set(`baymesh:nodeinfo:${node}`, "$", nodeInfoGenericObj)
+                  .set(this.key(`nodeinfo:${node}`), "$", nodeInfoGenericObj)
                   .then(() => {
-                    logger.info("deleted and re-added node info for: " + node);
+                    this.logger.info(
+                      `deleted and re-added node info for: ${node}`,
+                    );
                   })
-                  .catch((err) => {
-                    logger.error(err);
+                  .catch((innerErr) => {
+                    this.logger.error(String(innerErr));
                   });
               });
             }
           });
-          logger.error(`redis key: baymesh:nodeinfo:${node} ${err}`);
+          this.logger.error(
+            `redis key: ${this.key(`nodeinfo:${node}`)} ${err}`,
+          );
+          // Fallback for Redis without RedisJSON
+          this.redisClient
+            .set(this.key(`nodeinfo:${node}`), JSON.stringify(nodeInfoGenericObj))
+            .catch((fallbackErr) => {
+              this.logger.error(String(fallbackErr));
+            });
         });
-      logger.info(`updated node info for: ${node}`);
+      const packetSuffix =
+        typeof packetId === "number" ? ` (packetId: ${packetId})` : "";
+      const shortName = nodeInfoGenericObj?.shortName ?? "";
+      const longNameSafe = nodeInfoGenericObj?.longName ?? longName ?? "";
+      const nameSuffix =
+        shortName || longNameSafe
+          ? ` (short: ${shortName || "-"}, long: ${longNameSafe || "-"})`
+          : "";
+      this.logger.debug(
+        `updated node info for: ${node}${packetSuffix}${nameSuffix}`,
+      );
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       // Sentry.captureException(err);
     }
   }
@@ -66,12 +117,29 @@ class MeshRedis {
     try {
       // const foo = nodeIds.slice(0, nodeIds.length - 1);
       nodeIds = Array.from(new Set(nodeIds));
-      const nodeInfos = await this.redisClient.json.mGet(
-        nodeIds.map((nodeId) => `baymesh:nodeinfo:${nodeId2hex(nodeId)}`),
-        "$",
-      );
+      let nodeInfos: any[] = [];
+      try {
+        nodeInfos = await this.redisClient.json.mGet(
+          nodeIds.map((nodeId) => this.key(`nodeinfo:${nodeId2hex(nodeId)}`)),
+          "$",
+        );
+      } catch (err) {
+        const values = await this.redisClient.mGet(
+          nodeIds.map((nodeId) => this.key(`nodeinfo:${nodeId2hex(nodeId)}`)),
+        );
+        nodeInfos = values.map((value) => {
+          if (!value) return null;
+          try {
+            return JSON.parse(value);
+          } catch (parseErr) {
+            this.logger.error(String(parseErr));
+            return null;
+          }
+        });
+      }
+
       if (debug) {
-        logger.debug(JSON.stringify(nodeInfos));
+        this.logger.debug(JSON.stringify(nodeInfos));
       }
 
       const formattedNodeInfos = nodeInfos.flat().reduce((acc, item) => {
@@ -84,12 +152,14 @@ class MeshRedis {
         const missingNodes = nodeIds.filter((nodeId) => {
           return formattedNodeInfos[nodeId] === undefined;
         });
-        logger.info("Missing nodeInfo for nodes: " + missingNodes.join(","));
+        this.logger.info(
+          "Missing nodeInfo for nodes: " + missingNodes.join(","),
+        );
       }
       // console.log("Feep", nodeInfos);
       return formattedNodeInfos;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
     }
     return {};
   }
@@ -100,18 +170,18 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const linkedDiscordId = await this.redisClient.get(
-        `baymesh:nodelink:${hexNodeId}`,
+        this.key(`nodelink:${hexNodeId}`),
       );
       if (linkedDiscordId && discordId !== linkedDiscordId) {
-        logger.info(
+        this.logger.info(
           `Node ${hexNodeId} is already linked to discord ${discordId}`,
         );
         return `Node ${hexNodeId} is already linked to another account.`;
       }
-      await this.redisClient.set(`baymesh:nodelink:${hexNodeId}`, discordId);
+      await this.redisClient.set(this.key(`nodelink:${hexNodeId}`), discordId);
       return `Node ${hexNodeId} linked`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -122,16 +192,18 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const linkedDiscordId = await this.redisClient.get(
-        `baymesh:nodelink:${hexNodeId}`,
+        this.key(`nodelink:${hexNodeId}`),
       );
       if (discordId !== linkedDiscordId) {
-        logger.info(`Node ${hexNodeId} is not linked to discord ${discordId}`);
+        this.logger.info(
+          `Node ${hexNodeId} is not linked to discord ${discordId}`,
+        );
         return `Node ${hexNodeId} is not linked to your account.`;
       }
-      await this.redisClient.del(`baymesh:nodelink:${hexNodeId}`);
+      await this.redisClient.del(this.key(`nodelink:${hexNodeId}`));
       return `Node ${hexNodeId} unlinked`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -142,16 +214,16 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const trackerNode = await this.redisClient.get(
-        `baymesh:tracker:${hexNodeId}`,
+        this.key(`tracker:${hexNodeId}`),
       );
       if (trackerNode) {
-        logger.info(`Node ${hexNodeId} is already a tracker node`);
+        this.logger.info(`Node ${hexNodeId} is already a tracker node`);
         return `Node ${hexNodeId} is already a tracker node`;
       }
-      await this.redisClient.set(`baymesh:tracker:${hexNodeId}`, "1");
+      await this.redisClient.set(this.key(`tracker:${hexNodeId}`), "1");
       return `Node ${hexNodeId} added as a tracker node`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -162,16 +234,16 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const trackerNode = await this.redisClient.get(
-        `baymesh:tracker:${hexNodeId}`,
+        this.key(`tracker:${hexNodeId}`),
       );
       if (!trackerNode) {
-        logger.info(`Node ${hexNodeId} is not a tracker node`);
+        this.logger.info(`Node ${hexNodeId} is not a tracker node`);
         return `Node ${hexNodeId} is not a tracker node`;
       }
-      await this.redisClient.del(`baymesh:tracker:${hexNodeId}`);
+      await this.redisClient.del(this.key(`tracker:${hexNodeId}`));
       return `Node ${hexNodeId} removed as a tracker node`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -182,14 +254,14 @@ class MeshRedis {
         return false;
       }
       const trackerNode = await this.redisClient.get(
-        `baymesh:tracker:${hexNodeId}`,
+        this.key(`tracker:${hexNodeId}`),
       );
       if (trackerNode) {
         return true;
       }
       return false;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return false;
     }
   }
@@ -200,16 +272,16 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const balloonNode = await this.redisClient.get(
-        `baymesh:balloon:${hexNodeId}`,
+        this.key(`balloon:${hexNodeId}`),
       );
       if (balloonNode) {
-        logger.info(`Node ${hexNodeId} is already a balloon node`);
+        this.logger.info(`Node ${hexNodeId} is already a balloon node`);
         return `Node ${hexNodeId} is already a balloon node`;
       }
-      await this.redisClient.set(`baymesh:balloon:${hexNodeId}`, "1");
+      await this.redisClient.set(this.key(`balloon:${hexNodeId}`), "1");
       return `Node ${hexNodeId} added as a balloon node`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -220,16 +292,16 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const balloonNode = await this.redisClient.get(
-        `baymesh:balloon:${hexNodeId}`,
+        this.key(`balloon:${hexNodeId}`),
       );
       if (!balloonNode) {
-        logger.info(`Node ${hexNodeId} is not a balloon node`);
+        this.logger.info(`Node ${hexNodeId} is not a balloon node`);
         return `Node ${hexNodeId} is not a balloon node`;
       }
-      await this.redisClient.del(`baymesh:balloon:${hexNodeId}`);
+      await this.redisClient.del(this.key(`balloon:${hexNodeId}`));
       return `Node ${hexNodeId} removed as a balloon node`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -240,14 +312,14 @@ class MeshRedis {
         return false;
       }
       const balloonNode = await this.redisClient.get(
-        `baymesh:balloon:${hexNodeId}`,
+        this.key(`balloon:${hexNodeId}`),
       );
       if (balloonNode) {
         return true;
       }
       return false;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return false;
     }
   }
@@ -258,15 +330,40 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const discordId = await this.redisClient.get(
-        `baymesh:nodelink:${hexNodeId}`,
+        this.key(`nodelink:${hexNodeId}`),
       );
       if (discordId) {
         return discordId;
       }
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
     }
     return null;
+  }
+
+  /**
+   * Return all hex-node-IDs linked to the given Discord user.
+   */
+  async getNodesByDiscordId(discordId: string): Promise<string[]> {
+    const nodeIds: string[] = [];
+    try {
+      // iterate over all baymesh:nodelink:* keys without blocking Redis
+      for await (const key of this.redisClient.scanIterator({
+        MATCH: this.key("nodelink:*") as string,
+        COUNT: 100,
+      })) {
+        const linked = await this.redisClient.get(key);
+        if (linked === discordId) {
+          // key === "<prefix>:nodelink:<hexNodeId>"
+          const parts = key.split(":");
+          const hexNodeId = parts[parts.length - 1];
+          nodeIds.push(hexNodeId);
+        }
+      }
+    } catch (err) {
+      this.logger.error("getNodesByDiscordId: " + String(err));
+    }
+    return nodeIds;
   }
 
   async addBannedNode(hexNodeId: string) {
@@ -275,16 +372,16 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const bannedNode = await this.redisClient.get(
-        `baymesh:banned:${hexNodeId}`,
+        this.key(`banned:${hexNodeId}`),
       );
       if (bannedNode) {
-        logger.info(`Node ${hexNodeId} is already banned`);
+        this.logger.info(`Node ${hexNodeId} is already banned`);
         return `Node ${hexNodeId} is already banned`;
       }
-      await this.redisClient.set(`baymesh:banned:${hexNodeId}`, "1");
+      await this.redisClient.set(this.key(`banned:${hexNodeId}`), "1");
       return `Node ${hexNodeId} banned`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -295,16 +392,16 @@ class MeshRedis {
         return "Invalid Node Id";
       }
       const bannedNode = await this.redisClient.get(
-        `baymesh:banned:${hexNodeId}`,
+        this.key(`banned:${hexNodeId}`),
       );
       if (!bannedNode) {
-        logger.info(`Node ${hexNodeId} is not banned`);
+        this.logger.info(`Node ${hexNodeId} is not banned`);
         return `Node ${hexNodeId} is not banned`;
       }
-      await this.redisClient.del(`baymesh:banned:${hexNodeId}`);
+      await this.redisClient.del(this.key(`banned:${hexNodeId}`));
       return `Node ${hexNodeId} unbanned`;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return "Error";
     }
   }
@@ -315,18 +412,30 @@ class MeshRedis {
         return false;
       }
       const bannedNode = await this.redisClient.get(
-        `baymesh:banned:${hexNodeId}`,
+        this.key(`banned:${hexNodeId}`),
       );
       if (bannedNode) {
         return true;
       }
       return false;
     } catch (err) {
-      logger.error(err.message);
+      this.logger.error(err.message);
       return false;
     }
   }
 }
 
-const meshRedis = new MeshRedis();
-export default meshRedis;
+const buildRedisKeyPrefix = (meshId: string) => {
+  const cleaned = meshId.trim() || "default";
+  return `mesh:${cleaned}`;
+};
+
+export const createMeshRedis = async (
+  redisUrl: string,
+  meshId: string,
+  meshLogger: LoggerLike,
+) => {
+  const client = await getSharedClient(redisUrl);
+  return new MeshRedis(client, buildRedisKeyPrefix(meshId), meshLogger);
+};
+

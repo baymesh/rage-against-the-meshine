@@ -27,6 +27,10 @@ const commands = [
     ],
   },
   {
+    name: "mylinkednodes",
+    description: "List all nodes linked to your Discord account",
+  },
+  {
     name: "addtracker",
     description: "Start position updates from node in discord",
     options: [

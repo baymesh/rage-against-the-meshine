@@ -35,6 +35,8 @@ export interface ServiceEnvelope {
   gatewayId: string;
   topic: string;
   mqttServer: string;
+  meshId?: string;
+  gatewayMeshId?: string;
 }
 
 /**
