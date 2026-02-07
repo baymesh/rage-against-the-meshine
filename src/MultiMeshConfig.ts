@@ -33,6 +33,7 @@ export type MeshConfig = {
   discord: MeshDiscordConfig;
   routing: MeshRoutingConfig;
   nodeInfoUpdates?: boolean;
+  crossMeshPeers?: string[];
 };
 
 export type MultiMeshConfig = {
@@ -136,8 +137,21 @@ const validateMeshConfig = (mesh: unknown, index: number): MeshConfig => {
   const discord = meshObj.discord as MeshDiscordConfig;
   const routing = meshObj.routing as MeshRoutingConfig;
   const meshViewBaseUrl = meshObj.meshViewBaseUrl;
+  const crossMeshPeers = meshObj.crossMeshPeers;
   if (meshViewBaseUrl !== undefined && typeof meshViewBaseUrl !== "string") {
     throw new Error(`Invalid meshes[${index}].meshViewBaseUrl`);
+  }
+  if (crossMeshPeers !== undefined) {
+    if (!Array.isArray(crossMeshPeers)) {
+      throw new Error(`Invalid meshes[${index}].crossMeshPeers`);
+    }
+    crossMeshPeers.forEach((peer, peerIndex) => {
+      if (typeof peer !== "string" || peer.trim().length === 0) {
+        throw new Error(
+          `Invalid meshes[${index}].crossMeshPeers[${peerIndex}]`,
+        );
+      }
+    });
   }
 
   if (!mqtt || typeof mqtt !== "object") {
@@ -192,6 +206,7 @@ const validateMeshConfig = (mesh: unknown, index: number): MeshConfig => {
       channelRegex,
     },
     nodeInfoUpdates: meshObj.nodeInfoUpdates,
+    crossMeshPeers: crossMeshPeers ? [...crossMeshPeers] : undefined,
   };
 };
 

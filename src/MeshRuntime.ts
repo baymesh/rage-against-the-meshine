@@ -9,7 +9,7 @@ import {
 } from "discord.js";
 
 import FifoCache from "./FifoCache";
-import MeshPacketCache from "./MeshPacketCache";
+import CrossMeshPacketCache from "./CrossMeshPacketCache";
 import logger from "./Logger";
 import Commands from "./Commands";
 import { fetchNodeId } from "./NodeUtils";
@@ -21,7 +21,7 @@ import {
   type MeshConfig,
   type MultiMeshConfig,
 } from "./MultiMeshConfig";
-import { createMeshRedis } from "./MeshRedis";
+import { createMeshRedis, type MeshRedis } from "./MeshRedis";
 
 const DEFAULT_MQTT_USERNAME = process.env.MQTT_USERNAME || "meshdev";
 const DEFAULT_MQTT_PASSWORD = process.env.MQTT_PASSWORD || "large4cats";
@@ -29,6 +29,8 @@ const DEFAULT_MQTT_PASSWORD = process.env.MQTT_PASSWORD || "large4cats";
 export const startMeshRuntime = async (
   meshConfig: MeshConfig,
   globalConfig: MultiMeshConfig,
+  crossMeshPacketCache: CrossMeshPacketCache,
+  meshRedisMap: Map<string, MeshRedis>,
 ) => {
   const meshId = meshConfig.id;
   const meshLogger = logger.withTag(`mesh:${meshId}`);
@@ -44,8 +46,8 @@ export const startMeshRuntime = async (
     meshId,
     meshLogger,
   );
+  meshRedisMap.set(meshId, meshRedis);
   const discordMessageIdCache = new FifoCache<string, string>();
-  const meshPacketCache = new MeshPacketCache();
   const nodeInfoPacketCache = new FifoCache<string, string>();
 
   const client = new Client({
@@ -87,12 +89,13 @@ export const startMeshRuntime = async (
       topic,
       message,
       meshConfig.mqtt.topics,
-      meshPacketCache,
+      crossMeshPacketCache,
       nodeInfoPacketCache,
       meshConfig.nodeInfoUpdates ?? globalConfig.nodeInfoUpdates ?? false,
       meshConfig.mqtt.brokerUrl,
       meshRedis,
       meshLogger,
+      meshId,
     );
   });
 
@@ -355,7 +358,7 @@ export const startMeshRuntime = async (
     });
 
     setInterval(() => {
-      const packetGroups = meshPacketCache.getDirtyPacketGroups();
+      const packetGroups = crossMeshPacketCache.getDirtyPacketGroups(meshId);
       packetGroups.forEach((packetGroup) => {
         processTextMessage(packetGroup, {
           client,
@@ -366,6 +369,8 @@ export const startMeshRuntime = async (
           meshRedis,
           meshViewBaseUrl,
           meshId,
+          crossMeshPeers: meshConfig.crossMeshPeers ?? [],
+          meshRedisMap,
         });
       });
     }, 5000);

@@ -5,6 +5,8 @@ import logger from "./src/Logger";
 import { loadMultiMeshConfig } from "./src/config";
 import { startMeshRuntime } from "./src/MeshRuntime";
 import { Data, ServiceEnvelope, Position, User } from "./src/Protobufs";
+import CrossMeshPacketCache from "./src/CrossMeshPacketCache";
+import type { MeshRedis } from "./src/MeshRedis";
 
 // generate a pseduo uuid kinda thing to use as an instance id
 const INSTANCE_ID = (() => {
@@ -21,8 +23,13 @@ if (config.environment) {
 
 export { Data, ServiceEnvelope, Position, User };
 
+const crossMeshPacketCache = new CrossMeshPacketCache();
+const meshRedisMap = new Map<string, MeshRedis>();
+
 const results = await Promise.allSettled(
-  config.meshes.map((mesh) => startMeshRuntime(mesh, config)),
+  config.meshes.map((mesh) =>
+    startMeshRuntime(mesh, config, crossMeshPacketCache, meshRedisMap),
+  ),
 );
 
 results.forEach((result, index) => {

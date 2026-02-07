@@ -1,5 +1,5 @@
 import { ServiceEnvelope, Position, User } from "./Protobufs";
-import MeshPacketCache from "./MeshPacketCache";
+import CrossMeshPacketCache from "./CrossMeshPacketCache";
 import type FifoCache from "./FifoCache";
 import { decrypt } from "./decrypt";
 import type { MeshRedis } from "./MeshRedis";
@@ -35,12 +35,13 @@ const handleMqttMessage = async (
   topic,
   message,
   mqttTopics: string[],
-  meshPacketCache: MeshPacketCache,
+  crossMeshPacketCache: CrossMeshPacketCache,
   nodeInfoPacketCache: FifoCache<string, string>,
   nodeInfoUpdates: boolean,
   mqttBrokerUrl: string,
   meshRedis: MeshRedis,
   meshLogger: LoggerLike,
+  meshId: string,
 ) => {
   try {
     if (topic.includes("msh")) {
@@ -66,11 +67,12 @@ const handleMqttMessage = async (
           return;
         }
 
+        const fromHex = nodeId2hex(envelope.packet.from);
         if (
           mqttTopics.some((t) => {
             return matchesTopic(topic, t);
           }) ||
-          meshPacketCache.exists(envelope.packet.id)
+          crossMeshPacketCache.exists(envelope.packet.id, fromHex)
         ) {
           const isEncrypted = envelope.packet.encrypted?.length > 0;
           if (isEncrypted) {
@@ -81,7 +83,7 @@ const handleMqttMessage = async (
           }
           const portnum = envelope.packet?.decoded?.portnum;
           if (portnum === 1) {
-            meshPacketCache.add(envelope, topic, mqttBrokerUrl);
+            crossMeshPacketCache.add(envelope, topic, mqttBrokerUrl, meshId);
           } else if (portnum === 3) {
             const from = envelope.packet.from.toString(16);
             const isTrackerNode = await meshRedis.isTrackerNode(from);
@@ -93,7 +95,7 @@ const handleMqttMessage = async (
             if (!position.latitudeI && !position.longitudeI) {
               return;
             }
-            meshPacketCache.add(envelope, topic, mqttBrokerUrl);
+            crossMeshPacketCache.add(envelope, topic, mqttBrokerUrl, meshId);
           } else if (portnum === 4) {
             if (!nodeInfoUpdates) {
               // logger.debug("Node info updates disabled");

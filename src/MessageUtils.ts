@@ -14,6 +14,8 @@ type MessageRoutingContext = {
   meshRedis: MeshRedis;
   meshViewBaseUrl: string;
   meshId: string;
+  crossMeshPeers: string[];
+  meshRedisMap: Map<string, MeshRedis>;
 };
 
 const processTextMessage = async (packetGroup: any, context: MessageRoutingContext) => {
@@ -26,9 +28,28 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
     meshRedis,
     meshViewBaseUrl,
     meshId,
+    crossMeshPeers,
+    meshRedisMap,
   } = context;
   const meshLogger = logger.withTag(`mesh:${meshId}`);
-  const packet = packetGroup.serviceEnvelopes[0].packet;
+  const allowedMeshes = new Set([meshId, ...crossMeshPeers]);
+  const filteredEnvelopes = packetGroup.serviceEnvelopes.filter(
+    (envelope: any) => allowedMeshes.has(envelope.meshId ?? meshId),
+  );
+  if (
+    !filteredEnvelopes.some(
+      (envelope: any) => (envelope.meshId ?? meshId) === meshId,
+    )
+  ) {
+    return;
+  }
+
+  const filteredPacketGroup = {
+    ...packetGroup,
+    serviceEnvelopes: filteredEnvelopes,
+  };
+
+  const packet = filteredPacketGroup.serviceEnvelopes[0].packet;
   let text = packet.decoded.payload.toString();
   const to = nodeId2hex(packet.to);
   const portNum = packet?.decoded?.portnum;
@@ -44,14 +65,19 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
 
   if (process.env.ENVIRONMENT === "production" && to !== "ffffffff") {
     meshLogger.info(
-      `MessageId: ${packetGroup.id} Not to public channel: ${packetGroup.serviceEnvelopes.map((envelope: any) => envelope.topic)}`,
+      `MessageId: ${packetGroup.id} Not to public channel: ${filteredPacketGroup.serviceEnvelopes.map((envelope: any) => envelope.topic)}`,
     );
     return;
   }
 
-  const gatewayCount = packetGroup.serviceEnvelopes.filter(
+  const gatewayCount = filteredPacketGroup.serviceEnvelopes.filter(
     (value: any, index: number, self: any[]) =>
-      self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
+      self.findIndex(
+        (t) =>
+          t.gatewayId === value.gatewayId &&
+          (t.gatewayMeshId ?? t.meshId ?? meshId) ===
+            (value.gatewayMeshId ?? value.meshId ?? meshId),
+      ) === index,
   ).length;
 
   const existsInDiscordCache = discordMessageIdCache.exists(packet.id.toString());
@@ -71,16 +97,18 @@ const processTextMessage = async (packetGroup: any, context: MessageRoutingConte
   }
 
   const content = await createDiscordMessage(
-    packetGroup,
+    filteredPacketGroup,
     text,
     client,
     guild,
     meshRedis,
     meshViewBaseUrl,
     meshLogger,
+    meshId,
+    meshRedisMap,
   );
 
-  const channelId = packetGroup.serviceEnvelopes[0].channelId;
+  const channelId = filteredPacketGroup.serviceEnvelopes[0].channelId;
   const matchedRule = channelRegexRules.find((rule) => {
     const matched = rule.regex.test(channelId);
     if (rule.regex.global) {

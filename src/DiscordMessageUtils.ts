@@ -13,6 +13,8 @@ export const createDiscordMessage = async (
   meshRedis: MeshRedis,
   meshViewBaseUrl: string,
   meshLogger: LoggerLike,
+  meshId: string,
+  meshRedisMap: Map<string, MeshRedis>,
 ) => {
   try {
     const packet = packetGroup.serviceEnvelopes[0].packet;
@@ -21,12 +23,43 @@ export const createDiscordMessage = async (
     const portNum = packet?.decoded?.portnum;
     let msgText = text;
 
-    let nodeInfos = await meshRedis.getNodeInfos(
-      packetGroup.serviceEnvelopes
-        .map((se: any) => se.gatewayId.replace("!", ""))
-        .concat(from),
-      false,
-    );
+    const gatewayIdsByMesh = new Map<string, Set<string>>();
+    packetGroup.serviceEnvelopes.forEach((envelope: any) => {
+      const gatewayId = envelope.gatewayId.replace("!", "");
+      const gatewayMeshId = envelope.gatewayMeshId || envelope.meshId || meshId;
+      if (!gatewayIdsByMesh.has(gatewayMeshId)) {
+        gatewayIdsByMesh.set(gatewayMeshId, new Set());
+      }
+      gatewayIdsByMesh.get(gatewayMeshId)?.add(gatewayId);
+    });
+
+    if (!gatewayIdsByMesh.has(meshId)) {
+      gatewayIdsByMesh.set(meshId, new Set());
+    }
+    gatewayIdsByMesh.get(meshId)?.add(from);
+
+    const nodeInfosByMesh = new Map<string, Record<string, any>>();
+    for (const [gatewayMeshId, gatewayIds] of gatewayIdsByMesh.entries()) {
+      const redisForMesh = meshRedisMap.get(gatewayMeshId) ?? meshRedis;
+      const infos = await redisForMesh.getNodeInfos(
+        Array.from(gatewayIds),
+        false,
+      );
+      nodeInfosByMesh.set(gatewayMeshId, infos);
+    }
+
+    const getNodeInfo = (nodeId: string, primaryMeshId: string) => {
+      const primary = nodeInfosByMesh.get(primaryMeshId);
+      if (primary && primary[nodeId]) {
+        return primary[nodeId];
+      }
+      for (const infos of nodeInfosByMesh.values()) {
+        if (infos && infos[nodeId]) {
+          return infos[nodeId];
+        }
+      }
+      return null;
+    };
 
     let avatarUrl = "https://cdn.discordapp.com/embed/avatars/0.png";
 
@@ -65,7 +98,12 @@ export const createDiscordMessage = async (
 
     const gatewayCount = packetGroup.serviceEnvelopes.filter(
       (value: any, index: number, self: any[]) =>
-        self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
+        self.findIndex(
+          (t) =>
+            t.gatewayId === value.gatewayId &&
+            (t.gatewayMeshId ?? t.meshId ?? meshId) ===
+              (value.gatewayMeshId ?? value.meshId ?? meshId),
+        ) === index,
     ).length;
 
     const infoFields: any = [];
@@ -136,14 +174,26 @@ export const createDiscordMessage = async (
     packetGroup.serviceEnvelopes
       .filter(
         (value: any, index: number, self: any[]) =>
-          self.findIndex((t) => t.gatewayId === value.gatewayId) === index,
+          self.findIndex(
+            (t) =>
+              t.gatewayId === value.gatewayId &&
+              (t.gatewayMeshId ?? t.meshId ?? meshId) ===
+                (value.gatewayMeshId ?? value.meshId ?? meshId),
+          ) === index,
       )
         .forEach((envelope: any) => {
         const gatewayDelay =
           envelope.mqttTime.getTime() - packetGroup.time.getTime();
+        const gatewayMeshId = envelope.gatewayMeshId || envelope.meshId || meshId;
         let gatewayDisplayName = envelope.gatewayId.replace("!", "");
-        if (nodeInfos[gatewayDisplayName]) {
-          gatewayDisplayName = nodeInfos[gatewayDisplayName].shortName;
+        const gatewayInfos = nodeInfosByMesh.get(gatewayMeshId);
+        if (gatewayInfos && gatewayInfos[gatewayDisplayName]) {
+          gatewayDisplayName = gatewayInfos[gatewayDisplayName].shortName;
+        } else {
+          const fallbackInfo = getNodeInfo(gatewayDisplayName, meshId);
+          if (fallbackInfo?.shortName) {
+            gatewayDisplayName = fallbackInfo.shortName;
+          }
         }
 
         let hopText;
@@ -267,11 +317,11 @@ export const createDiscordMessage = async (
           timestamp: new Date(packet.rxTime * 1000).toISOString(),
 
           author: {
-            name: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].longName : "Unknown"}`,
+            name: `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`,
             url: `${meshViewBaseUrl}/packet_list/${packet.from}`,
             icon_url: avatarUrl,
           },
-          title: `${nodeInfos[nodeIdHex] ? nodeInfos[nodeIdHex].shortName : "UNK"}`,
+          title: `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`,
           description: msgText.length > 4096 ? msgText.slice(0, 4096) : msgText,
           fields: [...infoFields, ...gatewayFields2].slice(0, 25),
         },
