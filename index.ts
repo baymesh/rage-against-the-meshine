@@ -25,16 +25,28 @@ export { Data, ServiceEnvelope, Position, User };
 
 const crossMeshPacketCache = new CrossMeshPacketCache();
 const meshRedisMap = new Map<string, MeshRedis>();
+const activeMeshes = config.meshes.filter((mesh) => mesh.enabled !== false);
+const skippedMeshes = config.meshes
+  .filter((mesh) => mesh.enabled === false)
+  .map((mesh) => mesh.id);
 
-const results = await Promise.allSettled(
-  config.meshes.map((mesh) =>
-    startMeshRuntime(mesh, config, crossMeshPacketCache, meshRedisMap),
-  ),
-);
+if (skippedMeshes.length > 0) {
+  logger.warn(`Skipping disabled meshes: ${skippedMeshes.join(", ")}`);
+}
 
-results.forEach((result, index) => {
-  if (result.status === "rejected") {
-    const meshId = config.meshes[index]?.id || "unknown";
-    logger.error(`[mesh:${meshId}] Failed to start runtime: ${String(result.reason)}`);
-  }
-});
+if (activeMeshes.length === 0) {
+  logger.error("No enabled meshes found in configuration.");
+} else {
+  const results = await Promise.allSettled(
+    activeMeshes.map((mesh) =>
+      startMeshRuntime(mesh, config, crossMeshPacketCache, meshRedisMap),
+    ),
+  );
+
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const meshId = activeMeshes[index]?.id || "unknown";
+      logger.error(`[mesh:${meshId}] Failed to start runtime: ${String(result.reason)}`);
+    }
+  });
+}

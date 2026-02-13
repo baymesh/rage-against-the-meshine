@@ -31,6 +31,16 @@ describe("compileChannelRegexRules", () => {
 
     expect(rules[0].regex.test("LongFast")).toBe(true);
   });
+
+  it("ignores disabled channel regex rules", () => {
+    const rules = compileChannelRegexRules([
+      { pattern: "LongFast", discordChannelId: "123", enabled: false },
+      { pattern: "Medium", discordChannelId: "456", enabled: true },
+    ]);
+
+    expect(rules).toHaveLength(1);
+    expect(rules[0].discordChannelId).toBe("456");
+  });
 });
 
 describe("loadMultiMeshConfig", () => {
@@ -287,6 +297,46 @@ describe("loadMultiMeshConfig", () => {
     );
   });
 
+  it("rejects invalid channelRegex enabled flag type", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesh-config-"));
+    const configPath = path.join(dir, "config.json");
+
+    process.env.CONFIG_PATH = configPath;
+
+    process.env.REDIS_URL = "redis://localhost:6379";
+    const config = {
+      meshes: [
+        {
+          id: "test",
+          mqtt: {
+            brokerUrl: "mqtt://localhost:1883",
+            topics: ["msh/US/#"],
+          },
+          discord: {
+            token: "token",
+            clientId: "client",
+            guildId: "guild",
+          },
+          routing: {
+            channelRegex: [
+              {
+                pattern: "LongFast",
+                discordChannelId: "123",
+                enabled: "yes",
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
+
+    expect(() => loadMultiMeshConfig()).toThrow(
+      "Invalid meshes[0].routing.channelRegex[0].enabled",
+    );
+  });
+
   it("fails when placeholders resolve to empty strings", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesh-config-"));
     const configPath = path.join(dir, "config.json");
@@ -320,6 +370,136 @@ describe("loadMultiMeshConfig", () => {
 
     expect(() => loadMultiMeshConfig()).toThrow(
       "Invalid or missing meshes[0].discord.token",
+    );
+  });
+
+  it("validates mesh enabled and slashCommandsEnabled flags", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesh-config-"));
+    const configPath = path.join(dir, "config.json");
+
+    process.env.CONFIG_PATH = configPath;
+    process.env.REDIS_URL = "redis://localhost:6379";
+    const config = {
+      meshes: [
+        {
+          id: "mesh-enabled",
+          enabled: true,
+          slashCommandsEnabled: false,
+          mqtt: {
+            brokerUrl: "mqtt://localhost:1883",
+            topics: ["msh/US/#"],
+          },
+          discord: {
+            token: "token-1",
+            clientId: "client-1",
+            guildId: "guild-1",
+          },
+          routing: {
+            channelRegex: [
+              { pattern: "LongFast", discordChannelId: "123" },
+            ],
+          },
+        },
+        {
+          id: "mesh-disabled",
+          enabled: false,
+          slashCommandsEnabled: true,
+          mqtt: {
+            brokerUrl: "mqtt://localhost:1883",
+            topics: ["msh/US/2/#"],
+          },
+          discord: {
+            token: "token-2",
+            clientId: "client-2",
+            guildId: "guild-2",
+          },
+          routing: {
+            channelRegex: [
+              { pattern: "Medium", discordChannelId: "456", enabled: true },
+            ],
+          },
+        },
+      ],
+    };
+
+    fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
+
+    const loaded = loadMultiMeshConfig();
+    expect(loaded.meshes[0].enabled).toBe(true);
+    expect(loaded.meshes[0].slashCommandsEnabled).toBe(false);
+    expect(loaded.meshes[1].enabled).toBe(false);
+    expect(loaded.meshes[1].slashCommandsEnabled).toBe(true);
+  });
+
+  it("rejects invalid mesh enabled flag types", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesh-config-"));
+    const configPath = path.join(dir, "config.json");
+
+    process.env.CONFIG_PATH = configPath;
+    process.env.REDIS_URL = "redis://localhost:6379";
+    const config = {
+      meshes: [
+        {
+          id: "test",
+          enabled: "yes",
+          mqtt: {
+            brokerUrl: "mqtt://localhost:1883",
+            topics: ["msh/US/#"],
+          },
+          discord: {
+            token: "token",
+            clientId: "client",
+            guildId: "guild",
+          },
+          routing: {
+            channelRegex: [
+              { pattern: "LongFast", discordChannelId: "123" },
+            ],
+          },
+        },
+      ],
+    };
+
+    fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
+
+    expect(() => loadMultiMeshConfig()).toThrow(
+      "Invalid meshes[0].enabled",
+    );
+  });
+
+  it("rejects invalid slashCommandsEnabled flag types", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mesh-config-"));
+    const configPath = path.join(dir, "config.json");
+
+    process.env.CONFIG_PATH = configPath;
+    process.env.REDIS_URL = "redis://localhost:6379";
+    const config = {
+      meshes: [
+        {
+          id: "test",
+          slashCommandsEnabled: "nope",
+          mqtt: {
+            brokerUrl: "mqtt://localhost:1883",
+            topics: ["msh/US/#"],
+          },
+          discord: {
+            token: "token",
+            clientId: "client",
+            guildId: "guild",
+          },
+          routing: {
+            channelRegex: [
+              { pattern: "LongFast", discordChannelId: "123" },
+            ],
+          },
+        },
+      ],
+    };
+
+    fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
+
+    expect(() => loadMultiMeshConfig()).toThrow(
+      "Invalid meshes[0].slashCommandsEnabled",
     );
   });
 

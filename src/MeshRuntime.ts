@@ -49,6 +49,7 @@ export const startMeshRuntime = async (
   meshRedisMap.set(meshId, meshRedis);
   const discordMessageIdCache = new FifoCache<string, string>();
   const nodeInfoPacketCache = new FifoCache<string, string>();
+  const slashCommandsEnabled = meshConfig.slashCommandsEnabled ?? true;
 
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
@@ -99,18 +100,22 @@ export const startMeshRuntime = async (
     );
   });
 
-  try {
-    meshLogger.info("Refreshing application (/) commands.");
-    await rest.put(
-      Routes.applicationGuildCommands(
-        meshConfig.discord.clientId,
-        meshConfig.discord.guildId,
-      ),
-      { body: Commands },
-    );
-    meshLogger.info("Successfully reloaded application (/) commands.");
-  } catch (error) {
-    meshLogger.error(`Error registering commands: ${String(error)}`);
+  if (slashCommandsEnabled) {
+    try {
+      meshLogger.info("Refreshing application (/) commands.");
+      await rest.put(
+        Routes.applicationGuildCommands(
+          meshConfig.discord.clientId,
+          meshConfig.discord.guildId,
+        ),
+        { body: Commands },
+      );
+      meshLogger.info("Successfully reloaded application (/) commands.");
+    } catch (error) {
+      meshLogger.error(`Error registering commands: ${String(error)}`);
+    }
+  } else {
+    meshLogger.warn("Slash commands disabled; skipping registration.");
   }
 
   client.once("ready", () => {
@@ -129,6 +134,10 @@ export const startMeshRuntime = async (
       meshConfig.routing.channelRegex,
     );
 
+    if (channelRegexRules.length === 0) {
+      meshLogger.warn("No enabled channel regex rules found; Discord sends will be skipped.");
+    }
+
     const channelCache = new Map<string, any>();
     const resolveChannelById = (channelId: string) => {
       if (channelCache.has(channelId)) {
@@ -146,6 +155,15 @@ export const startMeshRuntime = async (
       }
 
       if (!interaction.isChatInputCommand()) return;
+
+      if (!slashCommandsEnabled) {
+        meshLogger.warn("Slash command received while disabled; ignoring.");
+        await interaction.reply({
+          content: "Slash commands are disabled for this mesh.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
 
       if (interaction.commandName === "linknode") {
         let nodeId = fetchNodeId(interaction, meshViewBaseUrl);

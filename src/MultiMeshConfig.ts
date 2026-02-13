@@ -6,6 +6,7 @@ export type ChannelRegexRuleConfig = {
   pattern: string;
   discordChannelId: string;
   flags?: string;
+  enabled?: boolean;
 };
 
 export type MeshRoutingConfig = {
@@ -34,6 +35,8 @@ export type MeshConfig = {
   routing: MeshRoutingConfig;
   nodeInfoUpdates?: boolean;
   crossMeshPeers?: string[];
+  enabled?: boolean;
+  slashCommandsEnabled?: boolean;
 };
 
 export type MultiMeshConfig = {
@@ -109,6 +112,10 @@ const validateChannelRegexRules = (
     if (!rule || typeof rule !== "object") {
       throw new Error(`Invalid ${field}[${index}]`);
     }
+    const enabled = (rule as ChannelRegexRuleConfig).enabled;
+    if (enabled !== undefined && typeof enabled !== "boolean") {
+      throw new Error(`Invalid ${field}[${index}].enabled`);
+    }
     const pattern = assertString(
       (rule as ChannelRegexRuleConfig).pattern,
       `${field}[${index}].pattern`,
@@ -121,7 +128,7 @@ const validateChannelRegexRules = (
     if (flags !== undefined && typeof flags !== "string") {
       throw new Error(`Invalid ${field}[${index}].flags`);
     }
-    return { pattern, discordChannelId, flags };
+    return { pattern, discordChannelId, flags, enabled: enabled ?? true };
   });
 };
 
@@ -133,11 +140,22 @@ const validateMeshConfig = (mesh: unknown, index: number): MeshConfig => {
   const meshObj = mesh as MeshConfig;
   const id = assertString(meshObj.id, `meshes[${index}].id`);
   const name = meshObj.name;
+  const enabled = meshObj.enabled;
+  if (enabled !== undefined && typeof enabled !== "boolean") {
+    throw new Error(`Invalid meshes[${index}].enabled`);
+  }
   const mqtt = meshObj.mqtt as MeshMqttConfig;
   const discord = meshObj.discord as MeshDiscordConfig;
   const routing = meshObj.routing as MeshRoutingConfig;
   const meshViewBaseUrl = meshObj.meshViewBaseUrl;
   const crossMeshPeers = meshObj.crossMeshPeers;
+  const slashCommandsEnabled = meshObj.slashCommandsEnabled;
+  if (
+    slashCommandsEnabled !== undefined &&
+    typeof slashCommandsEnabled !== "boolean"
+  ) {
+    throw new Error(`Invalid meshes[${index}].slashCommandsEnabled`);
+  }
   if (meshViewBaseUrl !== undefined && typeof meshViewBaseUrl !== "string") {
     throw new Error(`Invalid meshes[${index}].meshViewBaseUrl`);
   }
@@ -190,6 +208,7 @@ const validateMeshConfig = (mesh: unknown, index: number): MeshConfig => {
   return {
     id,
     name,
+    enabled: enabled ?? true,
     meshViewBaseUrl,
     mqtt: {
       brokerUrl,
@@ -207,6 +226,7 @@ const validateMeshConfig = (mesh: unknown, index: number): MeshConfig => {
     },
     nodeInfoUpdates: meshObj.nodeInfoUpdates,
     crossMeshPeers: crossMeshPeers ? [...crossMeshPeers] : undefined,
+    slashCommandsEnabled: slashCommandsEnabled ?? true,
   };
 };
 
@@ -367,7 +387,9 @@ export const loadMultiMeshConfig = (): MultiMeshConfig => {
 export const compileChannelRegexRules = (
   rules: ChannelRegexRuleConfig[],
 ): CompiledChannelRegexRule[] => {
-  return rules.map((rule) => {
+  return rules
+    .filter((rule) => rule.enabled !== false)
+    .map((rule) => {
     try {
       const regex = new RegExp(rule.pattern, rule.flags || undefined);
       return {
@@ -379,5 +401,5 @@ export const compileChannelRegexRules = (
         `Invalid channel regex pattern '${rule.pattern}': ${String(err)}`,
       );
     }
-  });
+    });
 };
