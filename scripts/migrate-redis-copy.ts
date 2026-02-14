@@ -23,6 +23,8 @@ const main = async () => {
   let skippedExisting = 0;
   let missingDump = 0;
   let errors = 0;
+  let fallbackCopied = 0;
+  let fallbackErrors = 0;
 
   try {
     for await (const key of source.scanIterator({ MATCH: PATTERN, COUNT: 500 })) {
@@ -57,8 +59,44 @@ const main = async () => {
         copied += 1;
         console.info(`Copied key: ${key}`);
       } catch (err) {
-        errors += 1;
-        console.error(`Failed to restore key ${key}: ${String(err)}`);
+        const errText = String(err);
+        console.warn(`Failed to restore key ${key}: ${errText}`);
+
+        // Fallback for older/newer dump formats: copy simple string values via GET/SET
+        try {
+          const type = await source.type(key);
+          if (type === "string") {
+            const val = await source.get(key);
+            if (val === null) {
+              console.warn(`Skipping fallback for ${key}: value disappeared`);
+            } else {
+              if (DRY_RUN) {
+                console.info(`[dry-run] Fallback SET key: ${key} (ttlMs=${ttlMs})`);
+              } else {
+                const setOpts: Record<string, any> = {};
+                if (ttlMs > 0) {
+                  setOpts.PX = ttlMs;
+                }
+                if (!OVERWRITE) {
+                  setOpts.NX = true;
+                }
+                const setRes = await dest.set(key, val, setOpts);
+                if (setRes) {
+                  fallbackCopied += 1;
+                  console.info(`Fallback copied key (string): ${key}`);
+                } else {
+                  console.warn(`Fallback skipped key ${key}: already exists`);
+                }
+              }
+            }
+          } else {
+            errors += 1;
+            console.error(`No fallback available for key ${key} of type ${type}`);
+          }
+        } catch (fallbackErr) {
+          fallbackErrors += 1;
+          console.error(`Fallback failed for key ${key}: ${String(fallbackErr)}`);
+        }
       }
     }
   } finally {
@@ -66,7 +104,7 @@ const main = async () => {
   }
 
   console.info(
-    `Done. scanned=${scanned} copied=${copied} skipped_existing=${skippedExisting} missing_dump=${missingDump} errors=${errors}`,
+    `Done. scanned=${scanned} copied=${copied} fallback_copied=${fallbackCopied} skipped_existing=${skippedExisting} missing_dump=${missingDump} errors=${errors} fallback_errors=${fallbackErrors}`,
   );
 };
 
