@@ -427,7 +427,7 @@ export class MeshRedis {
 
 const buildRedisKeyPrefix = (meshId: string) => {
   const cleaned = meshId.trim() || "default";
-  return `mesh:${cleaned}`;
+  return `${cleaned}`;
 };
 
 export const createMeshRedis = async (

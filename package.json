@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "test": "jest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "migrate:redis-prefix": "tsx scripts/migrate-redis-prefix.ts",
+    "migrate:redis-copy": "tsx scripts/migrate-redis-copy.ts"
   },
   "keywords": [],
   "author": "",
