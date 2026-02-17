@@ -55,6 +55,19 @@ export const startMeshRuntime = async (
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
   });
 
+  // Prevent process crashes on Discord WS errors; keep logging for visibility.
+  client.on("error", (err) => {
+    meshLogger.error(`Discord client error: ${String(err)}`);
+  });
+  client.on("shardError", (err: Error, shardId: number) => {
+    meshLogger.error(`Discord shard ${shardId} error: ${String(err)}`);
+  });
+  client.on("shardDisconnect", (event: any, shardId: number) => {
+    meshLogger.warn(
+      `Discord shard ${shardId} disconnected (code=${event?.code ?? "unknown"}, reason=${event?.reason ?? ""})`,
+    );
+  });
+
   const rest = new REST({ version: "10" }).setToken(
     meshConfig.discord.token,
   );
