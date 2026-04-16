@@ -1,9 +1,15 @@
 import type { LoggerLike } from "./Logger";
 
 const mqttStreamsWithErrorHandler = new WeakSet<object>();
+type MqttTransportStreamLike = {
+  on?: (event: string, listener: (err: unknown) => void) => void;
+};
+type MqttClientWithOptionalStream = {
+  stream?: MqttTransportStreamLike;
+};
 
 export const attachMqttTransportErrorHandler = (
-  mqttClient: any,
+  mqttClient: MqttClientWithOptionalStream,
   meshLogger: LoggerLike,
 ) => {
   const stream = mqttClient?.stream;
