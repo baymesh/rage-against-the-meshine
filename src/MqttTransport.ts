@@ -1,6 +1,6 @@
 import type { LoggerLike } from "./Logger";
 
-const MQTT_STREAM_ERROR_HANDLER_ATTACHED = "__meshRuntimeErrorHandlerAttached";
+const mqttStreamsWithErrorHandler = new WeakSet<object>();
 
 export const attachMqttTransportErrorHandler = (
   mqttClient: any,
@@ -10,10 +10,10 @@ export const attachMqttTransportErrorHandler = (
   if (!stream || typeof stream.on !== "function") {
     return;
   }
-  if (stream[MQTT_STREAM_ERROR_HANDLER_ATTACHED]) {
+  if (mqttStreamsWithErrorHandler.has(stream)) {
     return;
   }
-  stream[MQTT_STREAM_ERROR_HANDLER_ATTACHED] = true;
+  mqttStreamsWithErrorHandler.add(stream);
   stream.on("error", (err: unknown) => {
     meshLogger.error(`MQTT transport error: ${String(err)}`);
   });
