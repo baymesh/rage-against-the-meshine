@@ -1,4 +1,5 @@
-entrypoint = "index.js"
+run = "tsx index.ts"
+entrypoint = "index.ts"
 modules = ["nodejs-20"]
 hidden = [".config", "package-lock.json"]
 
@@ -12,6 +13,9 @@ channel = "stable-24_05"
 language = "nodejs"
 
 [deployment]
-run = ["node", "index.js"]
-deploymentTarget = "cloudrun"
-ignorePorts = false
+run = ["tsx", "index.ts"]
+deploymentTarget = "gce"
+ignorePorts = true
+
+[agent]
+expertMode = true
