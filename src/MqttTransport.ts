@@ -21,6 +21,7 @@ export const attachMqttTransportErrorHandler = (
   }
   mqttStreamsWithErrorHandler.add(stream);
   stream.on("error", (err: unknown) => {
-    meshLogger.error(`MQTT transport error: ${String(err)}`);
+    const errorText = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    meshLogger.error(`MQTT transport error: ${errorText}`);
   });
 };

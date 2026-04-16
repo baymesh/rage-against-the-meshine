@@ -24,7 +24,9 @@ describe("attachMqttTransportErrorHandler", () => {
     stream.emit("error", new Error("Opening handshake has timed out"));
 
     expect(meshLogger.error).toHaveBeenCalledWith(
-      expect.stringContaining("Opening handshake has timed out"),
+      expect.stringMatching(
+        /MQTT transport error: .*Opening handshake has timed out/,
+      ),
     );
   });
 
