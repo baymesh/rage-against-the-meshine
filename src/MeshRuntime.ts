@@ -22,6 +22,7 @@ import {
   type MultiMeshConfig,
 } from "./MultiMeshConfig";
 import { createMeshRedis, type MeshRedis } from "./MeshRedis";
+import { attachMqttTransportErrorHandler } from "./MqttTransport";
 
 const DEFAULT_MQTT_USERNAME = process.env.MQTT_USERNAME || "meshdev";
 const DEFAULT_MQTT_PASSWORD = process.env.MQTT_PASSWORD || "large4cats";
@@ -76,9 +77,13 @@ export const startMeshRuntime = async (
     username: meshConfig.mqtt.username || DEFAULT_MQTT_USERNAME,
     password: meshConfig.mqtt.password || DEFAULT_MQTT_PASSWORD,
   });
+  attachMqttTransportErrorHandler(mqttClient, meshLogger);
 
   mqttClient.on("error", (err: any) => {
     meshLogger.error(`MQTT Client Error: ${String(err)}`);
+  });
+  mqttClient.on("reconnect", () => {
+    attachMqttTransportErrorHandler(mqttClient, meshLogger);
   });
 
   mqttClient.on("connect", () => {
