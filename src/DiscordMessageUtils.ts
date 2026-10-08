@@ -4,6 +4,7 @@ import { Position } from "./Protobufs";
 import type { LoggerLike } from "./Logger";
 import { DecodedPosition, decodedPositionToString } from "./MeshPacketCache";
 import type { MeshRedis } from "./MeshRedis";
+import { escapeMaskedLinks, sanitizeLinkLabel } from "./MarkdownUtils";
 
 export const createDiscordMessage = async (
   packetGroup: any,
@@ -22,7 +23,9 @@ export const createDiscordMessage = async (
     const from = nodeId2hex(packet.from);
     const nodeIdHex = nodeId2hex(from);
     const portNum = packet?.decoded?.portnum;
-    let msgText = text;
+    // The description is rendered as markdown; stop mesh text from smuggling
+    // in masked links (`[label](url)`) with a hidden destination.
+    let msgText = escapeMaskedLinks(text);
 
     const gatewayIdsByMesh = new Map<string, Set<string>>();
     packetGroup.serviceEnvelopes.forEach((envelope: any) => {
@@ -237,8 +240,10 @@ export const createDiscordMessage = async (
           hopGroup = "Unknown Hops";
         }
 
+        // gatewayDisplayName is an attacker-controlled shortName; a `]` in it
+        // would close our link label early and supply its own destination.
         const gatewayFieldText =
-          `[${gatewayDisplayName} ${hopText}` +
+          `[${sanitizeLinkLabel(gatewayDisplayName)} ${hopText}` +
           `](${meshViewBaseUrl}/packet_list/${nodeHex2id(envelope.gatewayId.replace("!", ""))})`;
         const gatewayFieldTextPlain = `${gatewayDisplayName} ${hopText}`.trim();
 
