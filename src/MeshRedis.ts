@@ -1,5 +1,5 @@
 import { createClient, RedisClientType } from "redis";
-import { nodeId2hex } from "./NodeUtils";
+import { nodeId2hex, clampLongName, clampShortName } from "./NodeUtils";
 import type { LoggerLike } from "./Logger";
 
 let sharedClient: RedisClientType | null = null;
@@ -58,8 +58,15 @@ export class MeshRedis {
     packetId?: number,
   ) {
     try {
+      // Names come straight off MQTT with no length limit; clamp them to the
+      // firmware limits so a spoofed NodeInfo cannot wedge Discord rendering.
+      longName = clampLongName(longName);
       this.redisClient.set(this.key(`node:${node}`), longName);
       const nodeInfoGenericObj = JSON.parse(JSON.stringify(nodeInfo));
+      nodeInfoGenericObj.longName = clampLongName(nodeInfoGenericObj.longName);
+      nodeInfoGenericObj.shortName = clampShortName(
+        nodeInfoGenericObj.shortName,
+      );
       // remove leading "!" from id
       nodeInfoGenericObj.id = nodeInfoGenericObj.id.replace("!", "");
       // add hopStart to nodeInfo

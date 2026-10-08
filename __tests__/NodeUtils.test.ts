@@ -24,3 +24,31 @@ describe("NodeUtils", () => {
     expect(nodeId).toBe("0000000a");
   });
 });
+
+describe("clampNodeName", () => {
+  const {
+    clampLongName,
+    clampShortName,
+    MAX_LONG_NAME_CHARS,
+    MAX_SHORT_NAME_CHARS,
+  } = require("../src/NodeUtils");
+
+  it("leaves firmware-sized names untouched", () => {
+    expect(clampLongName("Base Camp Repeater")).toBe("Base Camp Repeater");
+    expect(clampShortName("BCR1")).toBe("BCR1");
+    expect(clampShortName("🏔️")).toBe("🏔️");
+  });
+
+  it("truncates oversized names by code point", () => {
+    const long = "A".repeat(100000);
+    expect(clampLongName(long)).toHaveLength(MAX_LONG_NAME_CHARS);
+    expect(Array.from(clampShortName("😀".repeat(20)))).toHaveLength(
+      MAX_SHORT_NAME_CHARS,
+    );
+  });
+
+  it("returns an empty string for non-string input", () => {
+    expect(clampLongName(undefined)).toBe("");
+    expect(clampShortName(42)).toBe("");
+  });
+});
