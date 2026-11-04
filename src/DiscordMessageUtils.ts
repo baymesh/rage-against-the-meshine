@@ -351,6 +351,19 @@ export const createDiscordMessage = async (
       finalMapUrl = undefined;
     }
 
+    // Discord hard limits: author.name and title are 256 chars. Names are
+    // clamped on the way into Redis, but older records (or another writer)
+    // may still hold oversized values, so clamp again at render time.
+    const DISCORD_NAME_LIMIT = 256;
+    const clampForDiscord = (value: string) =>
+      Array.from(value).slice(0, DISCORD_NAME_LIMIT).join("");
+    const authorName = clampForDiscord(
+      `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`,
+    );
+    const titleText = clampForDiscord(
+      `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`,
+    );
+
     const content: any = {
       username: "Mesh Bot",
       avatar_url:
@@ -362,11 +375,11 @@ export const createDiscordMessage = async (
           timestamp: new Date(packet.rxTime * 1000).toISOString(),
 
           author: {
-            name: `${getNodeInfo(nodeIdHex, meshId)?.longName ?? "Unknown"}`,
+            name: authorName,
             url: finalAuthorUrl,
             icon_url: avatarUrl,
           },
-          title: `${getNodeInfo(nodeIdHex, meshId)?.shortName ?? "UNK"}`,
+          title: titleText,
           description: safeDescription,
           fields: [...infoFields, ...finalGatewayFields].slice(0, 25),
         },
